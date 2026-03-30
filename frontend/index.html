@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>跨境业务企业信息查询</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+
+<div class="app-shell" id="app">
+
+  <!-- ── Header ──────────────────────────────────────────── -->
+  <header class="app-header">
+    <div class="header-mark">
+      <span class="stamp-dot"></span>
+      <div>
+        <div class="header-title">跨境业务信息查询</div>
+        <div class="header-subtitle">Cross-Border Intelligence System</div>
+      </div>
+    </div>
+
+    <nav class="manifest-stages" id="stageNav">
+      <div class="stage-item" data-stage="idle"><span class="stage-dot"></span>待机</div>
+      <div class="stage-item" data-stage="uploading"><span class="stage-dot"></span>上传</div>
+      <div class="stage-item" data-stage="searching"><span class="stage-dot"></span>搜索</div>
+      <div class="stage-item" data-stage="extracting"><span class="stage-dot"></span>抽取</div>
+      <div class="stage-item" data-stage="done"><span class="stage-dot"></span>完成</div>
+    </nav>
+  </header>
+
+  <!-- ── Sidebar ─────────────────────────────────────────── -->
+  <aside class="sidebar" id="sidebar">
+
+    <!-- 搜索策略 -->
+    <div class="config-section">
+      <div class="config-section-title">搜索策略</div>
+
+      <!-- 搜索源多选 -->
+      <div class="field-group">
+        <div class="field-label">搜索源（可多选）</div>
+
+        <!-- 秘塔 -->
+        <div class="source-item" id="metasoSourceItem">
+          <div class="source-header">
+            <label class="source-check-label">
+              <input type="checkbox" id="sourceMetaso" checked onchange="app.onSourceChange()" />
+              <span class="source-name">秘塔AI搜索</span>
+            </label>
+            <span class="field-preset-badge" id="metasoPresetBadge" style="display:none">后端已预置</span>
+          </div>
+          <div class="source-key-row" id="metasoKeyRow">
+            <div class="preset-row">
+              <label class="toggle-switch">
+                <input type="checkbox" id="metasoUsePreset" onchange="app.syncPresetInputState(); app.saveConfig();" />
+                <span class="toggle-track"></span>
+              </label>
+              <span class="preset-label">使用后端预置 Key</span>
+            </div>
+            <input type="password" class="field-input" id="metasoKey"
+              placeholder="mk-xxxxxxxx（秘塔 API Key）" autocomplete="off" />
+          </div>
+        </div>
+
+        <!-- 百度千帆 -->
+        <div class="source-item" id="baiduSourceItem">
+          <div class="source-header">
+            <label class="source-check-label">
+              <input type="checkbox" id="sourceBaidu" onchange="app.onSourceChange()" />
+              <span class="source-name">百度千帆搜索</span>
+            </label>
+            <span class="field-preset-badge" id="baiduPresetBadge" style="display:none">后端已预置</span>
+          </div>
+          <div class="source-key-row" id="baiduKeyRow" style="display:none">
+            <div class="preset-row">
+              <label class="toggle-switch">
+                <input type="checkbox" id="baiduUsePreset" onchange="app.syncPresetInputState(); app.saveConfig();" />
+                <span class="toggle-track"></span>
+              </label>
+              <span class="preset-label">使用后端预置 Key</span>
+            </div>
+            <input type="password" class="field-input" id="baiduKey"
+              placeholder="千帆 API Key" autocomplete="off" />
+          </div>
+        </div>
+      </div>
+
+      <!-- 搜索条数 -->
+      <div class="field-group">
+        <div class="field-label">每源检索条数</div>
+        <div class="search-limit-row">
+          <select class="field-select" id="searchResultLimit" onchange="app.saveConfig()">
+            <option value="5">5 条</option>
+            <option value="10" selected>10 条（默认）</option>
+            <option value="20">20 条</option>
+            <option value="30">30 条</option>
+            <option value="50">50 条（最精确）</option>
+          </select>
+          <span class="search-limit-hint" id="searchLimitHint">·</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-divider"></div>
+
+    <!-- 字段配置 -->
+    <div class="config-section">
+      <div class="config-section-title-row">
+        <span class="config-section-title">字段配置</span>
+        <div class="field-batch-btns">
+          <button class="btn-micro" onclick="app.selectAllFields()">全选</button>
+          <button class="btn-micro" onclick="app.clearAllFields()">清空</button>
+          <button class="btn-micro" onclick="app.resetFields()">默认</button>
+        </div>
+      </div>
+
+      <!-- 总结字段组 -->
+      <div class="field-group-block">
+        <div class="field-group-label" onclick="app.toggleFieldGroup('summary')">
+          <span class="field-group-arrow" id="summaryArrow">▾</span>
+          总结维度
+          <span class="field-group-count" id="summaryCount"></span>
+        </div>
+        <div class="field-check-list" id="fieldListSummary"></div>
+      </div>
+
+      <!-- 标签字段组 -->
+      <div class="field-group-block">
+        <div class="field-group-label" onclick="app.toggleFieldGroup('tags')">
+          <span class="field-group-arrow" id="tagsArrow">▾</span>
+          标签维度
+          <span class="field-group-count" id="tagsCount"></span>
+        </div>
+        <div class="field-check-list" id="fieldListTags"></div>
+      </div>
+
+      <!-- 自定义字段 -->
+      <div class="field-group-block" id="customFieldsBlock" style="display:none">
+        <div class="field-group-label">
+          <span class="field-group-arrow">▾</span>
+          自定义字段
+          <span class="field-group-count" id="customCount"></span>
+        </div>
+        <div class="field-check-list" id="fieldListCustom"></div>
+      </div>
+
+      <!-- 添加自定义字段 -->
+      <div class="add-field-area">
+        <button class="btn-add-field" id="addFieldBtn" onclick="app.toggleAddFieldForm()">
+          + 添加自定义字段
+        </button>
+        <div class="add-field-form" id="addFieldForm" style="display:none">
+          <input type="text" class="field-input" id="newFieldLabel" placeholder="字段名称（如：是否有工厂）" />
+          <div class="add-field-row">
+            <select class="field-select-sm" id="newFieldGroup">
+              <option value="summary">总结</option>
+              <option value="tags">标签</option>
+            </select>
+            <select class="field-select-sm" id="newFieldType">
+              <option value="yesno">是/否</option>
+              <option value="text">文本</option>
+              <option value="region">地区</option>
+              <option value="amount">金额</option>
+            </select>
+          </div>
+          <input type="text" class="field-input" id="newFieldInstruction"
+            placeholder="抽取说明（如：只填是/否/未提及）" />
+          <div class="add-field-actions">
+            <button class="btn-micro btn-micro-primary" onclick="app.addCustomField()">确认添加</button>
+            <button class="btn-micro" onclick="app.toggleAddFieldForm()">取消</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-divider"></div>
+
+    <!-- LLM 选择 -->
+    <div class="config-section">
+      <div class="config-section-title">大模型</div>
+
+      <div class="provider-toggle">
+        <button class="provider-btn active" id="btnDeepseek" onclick="app.selectLLM('deepseek_official')">
+          DeepSeek 官方
+        </button>
+        <button class="provider-btn" id="btnClaude" onclick="app.selectLLM('claude_proxy')">
+          Claude 中转站
+        </button>
+      </div>
+
+      <div class="field-group" id="llmBaseUrlGroup">
+        <div class="field-label">Base URL</div>
+        <input type="text" class="field-input" id="llmBaseUrl"
+          placeholder="https://api.deepseek.com/v1" autocomplete="off" />
+      </div>
+
+      <div class="field-group">
+        <div class="field-label">
+          API Key
+          <span class="field-preset-badge" id="llmPresetBadge" style="display:none">后端已预置</span>
+        </div>
+        <div class="preset-row">
+          <label class="toggle-switch">
+            <input type="checkbox" id="llmUsePreset" onchange="app.syncPresetInputState(); app.saveConfig();" />
+            <span class="toggle-track"></span>
+          </label>
+          <span class="preset-label">使用后端预置 Key</span>
+        </div>
+        <input type="password" class="field-input" id="llmKey"
+          placeholder="sk-xxxxxxxx" autocomplete="off" />
+      </div>
+
+      <div class="field-group">
+        <div class="field-label">模型</div>
+        <input type="text" class="field-input" id="llmModel"
+          placeholder="deepseek-chat" autocomplete="off" />
+      </div>
+    </div>
+
+    <div class="sidebar-divider"></div>
+
+    <!-- 并发控制 -->
+    <div class="config-section">
+      <div class="config-section-title">并发控制</div>
+      <div class="field-group">
+        <div class="concurrency-row">
+          <span class="concurrency-label">搜索并发</span>
+          <input type="range" class="range-slider" id="searchConcurrency" min="1" max="20" value="5" />
+          <span class="range-value" id="searchConcurrencyVal">5</span>
+        </div>
+        <div class="concurrency-row">
+          <span class="concurrency-label">LLM 并发</span>
+          <input type="range" class="range-slider" id="llmConcurrency" min="1" max="10" value="3" />
+          <span class="range-value" id="llmConcurrencyVal">3</span>
+        </div>
+        <div class="throughput-hint" id="throughputHint">— 企业/小时</div>
+      </div>
+    </div>
+
+    <div class="sidebar-divider"></div>
+
+    <!-- 企业名单 -->
+    <div class="config-section">
+      <div class="config-section-title">企业名单</div>
+      <div class="upload-zone" id="uploadZone"
+        ondragover="app.onDragOver(event)" ondragleave="app.onDragLeave(event)" ondrop="app.onDrop(event)">
+        <input type="file" id="fileInput" accept=".xlsx,.xls" onchange="app.onFileChange(event)" />
+        <div class="upload-icon">📋</div>
+        <div class="upload-text">
+          <strong>点击选择</strong> 或拖入 Excel 文件<br/>第一列应为企业名称
+        </div>
+        <div class="upload-filename" id="uploadFilename"></div>
+      </div>
+    </div>
+
+    <!-- 提交 -->
+    <button class="btn-submit" id="submitBtn" onclick="app.submitJob()" disabled>
+      开始批量查询
+    </button>
+
+  </aside>
+
+  <!-- ── Main Panel ──────────────────────────────────────── -->
+  <main class="main-panel" id="mainPanel">
+
+    <!-- 空状态 -->
+    <div class="empty-state" id="emptyState">
+      <div class="empty-state-icon">🗂️</div>
+      <div class="empty-state-text">
+        请在左侧配置参数并上传企业名单<br/>
+        系统将自动搜索、抽取结构化跨境业务信息
+      </div>
+    </div>
+
+    <!-- 进度卡 -->
+    <div class="progress-card" id="progressCard" style="display:none">
+      <div class="progress-meta">
+        <div class="progress-numbers">
+          <span class="progress-big-num" id="progressDone">0</span>
+          <span class="progress-label">/ <span id="progressTotal">0</span> 家企业</span>
+        </div>
+        <div class="progress-stats">
+          <div class="stat-item">
+            <span class="stat-num success" id="progressSuccess">0</span>
+            <span class="stat-lbl">成功</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-num fail" id="progressFail">0</span>
+            <span class="stat-lbl">失败</span>
+          </div>
+        </div>
+      </div>
+      <div class="progress-bar-track">
+        <div class="progress-bar-fill" id="progressBar"></div>
+      </div>
+      <div class="progress-info-row">
+        <span class="progress-current-company" id="progressCurrentCompany">准备中...</span>
+        <span class="progress-timing" id="progressTiming">—</span>
+      </div>
+      <div class="progress-actions">
+        <button class="btn-cancel" id="cancelBtn" onclick="app.cancelJob()" style="display:none">
+          ■ 停止处理
+        </button>
+        <a class="btn-download" id="downloadBtn" href="#" onclick="app.downloadResult(event)" style="display:none">
+          ⬇ 下载结果 Excel
+        </a>
+      </div>
+    </div>
+
+    <!-- 日志流 -->
+    <div class="log-card" id="logCard" style="display:none">
+      <div class="log-header">
+        <span class="log-title">实时日志</span>
+        <button class="log-clear-btn" onclick="app.clearLog()">清空</button>
+      </div>
+      <div class="log-body" id="logBody"></div>
+    </div>
+
+    <!-- 企业列表 -->
+    <div class="company-list-card" id="companyListCard" style="display:none">
+      <div class="company-list-header">
+        <span class="company-list-title">企业处理详情</span>
+        <span class="company-list-count" id="companyListCount">0 家</span>
+      </div>
+      <div class="company-list-body" id="companyListBody"></div>
+    </div>
+
+  </main>
+
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
