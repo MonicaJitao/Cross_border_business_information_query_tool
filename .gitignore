@@ -1,2 +1,14 @@
 .env
 .cursor/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Test cache
+.pytest_cache/
+
+# Claude artifacts
+.claude/
