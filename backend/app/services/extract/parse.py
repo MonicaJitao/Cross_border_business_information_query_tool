@@ -47,15 +47,24 @@ def parse_llm_json(text: str) -> tuple[Optional[dict], str]:
     """
     result = _try_direct(text)
     if result is not None:
-        return result, "direct"
+        strategy = "direct"
+    else:
+        result = _try_extract_block(text)
+        if result is not None:
+            strategy = "code_block"
+        else:
+            result = _try_extract_brace(text)
+            if result is not None:
+                strategy = "brace_extract"
+            else:
+                logger.warning("JSON 解析全部失败，原文前 200 字: %s", text[:200])
+                return None, "failed"
 
-    result = _try_extract_block(text)
+    # 如果解析成功，确保包含 summary_notes 和 tags_notes
     if result is not None:
-        return result, "code_block"
+        if "summary" in result and "summary_notes" not in result:
+            result["summary_notes"] = {}
+        if "tags" in result and "tags_notes" not in result:
+            result["tags_notes"] = {}
 
-    result = _try_extract_brace(text)
-    if result is not None:
-        return result, "brace_extract"
-
-    logger.warning("JSON 解析全部失败，原文前 200 字: %s", text[:200])
-    return None, "failed"
+    return result, strategy
