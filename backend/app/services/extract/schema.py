@@ -27,8 +27,12 @@ class CompanyExtraction(BaseModel):
     company_name: str
     # summary 字段结果，key = FieldDef.id（group="summary" 的字段）
     summary: dict[str, str] = Field(default_factory=dict)
+    # summary 字段的 LLM 判断理由，key = FieldDef.id
+    summary_notes: dict[str, str] = Field(default_factory=dict)
     # tags 字段结果，key = FieldDef.id（group="tags" 的字段）
     tags: dict[str, str] = Field(default_factory=dict)
+    # tags 字段的 LLM 判断理由，key = FieldDef.id
+    tags_notes: dict[str, str] = Field(default_factory=dict)
     evidence_count: int = 0
     sources: list[str] = Field(default_factory=list)
     error: Optional[str] = None
