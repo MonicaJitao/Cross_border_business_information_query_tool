@@ -1240,6 +1240,57 @@ body {
   vertical-align: middle;
 }
 
+/* ── 结构化结果展示 ──────────────────────────────────────────── */
+.result-group-title {
+  font-family: var(--font-serif);
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: var(--sp-3);
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid rgba(14,22,33,.1);
+}
+
+.result-field {
+  margin-bottom: var(--sp-3);
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid rgba(14,22,33,.04);
+}
+
+.result-field:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.result-field-label {
+  font-family: var(--font-mono);
+  font-size: .68rem;
+  font-weight: 500;
+  color: var(--ink-light);
+  margin-bottom: var(--sp-1);
+  letter-spacing: .04em;
+}
+
+.result-field-value {
+  font-family: var(--font-sans);
+  font-size: .78rem;
+  color: var(--text);
+  line-height: 1.5;
+  margin-bottom: var(--sp-1);
+}
+
+.field-note {
+  font-family: var(--font-sans);
+  font-size: .7rem;
+  color: var(--text-dim);
+  line-height: 1.5;
+  padding-left: var(--sp-3);
+  margin-top: var(--sp-1);
+  border-left: 2px solid var(--paper-deep);
+  font-style: italic;
+}
+
 /* ── Responsive ─────────────────────────────────────────────── */
 @media (max-width: 900px) {
   .app-shell {

@@ -98,19 +98,15 @@ const app = (() => {
   // ── 字段面板渲染 ──────────────────────────────────────────────
   function refreshFieldPanel() {
     const summaryFields = state.fieldCatalog.filter(f => f.group === 'summary' && f.is_builtin);
-    const tagsFields    = state.fieldCatalog.filter(f => f.group === 'tags'    && f.is_builtin);
     const customFields  = state.fieldCatalog.filter(f => !f.is_builtin);
 
     renderFieldList('fieldListSummary', summaryFields);
-    renderFieldList('fieldListTags',    tagsFields);
     renderFieldList('fieldListCustom',  customFields, true);
 
     // 更新计数
     const sumEnabled = summaryFields.filter(f => state.fieldEnabled[f.id]).length;
-    const tagEnabled = tagsFields.filter(f => state.fieldEnabled[f.id]).length;
     const cusEnabled = customFields.filter(f => state.fieldEnabled[f.id]).length;
     document.getElementById('summaryCount').textContent = `${sumEnabled}/${summaryFields.length}`;
-    document.getElementById('tagsCount').textContent    = `${tagEnabled}/${tagsFields.length}`;
     document.getElementById('customCount').textContent  = `${cusEnabled}/${customFields.length}`;
 
     const customBlock = document.getElementById('customFieldsBlock');
@@ -149,19 +145,16 @@ const app = (() => {
 
   function refreshFieldCounters() {
     const summaryFields = state.fieldCatalog.filter(f => f.group === 'summary' && f.is_builtin);
-    const tagsFields    = state.fieldCatalog.filter(f => f.group === 'tags'    && f.is_builtin);
     const customFields  = state.fieldCatalog.filter(f => !f.is_builtin);
     const sumEnabled = summaryFields.filter(f => state.fieldEnabled[f.id]).length;
-    const tagEnabled = tagsFields.filter(f => state.fieldEnabled[f.id]).length;
     const cusEnabled = customFields.filter(f => state.fieldEnabled[f.id]).length;
     document.getElementById('summaryCount').textContent = `${sumEnabled}/${summaryFields.length}`;
-    document.getElementById('tagsCount').textContent    = `${tagEnabled}/${tagsFields.length}`;
     document.getElementById('customCount').textContent  = `${cusEnabled}/${customFields.length}`;
   }
 
   function toggleFieldGroup(group) {
-    const listId  = group === 'summary' ? 'fieldListSummary' : 'fieldListTags';
-    const arrowId = group === 'summary' ? 'summaryArrow' : 'tagsArrow';
+    const listId  = 'fieldListSummary';
+    const arrowId = 'summaryArrow';
     const list    = document.getElementById(listId);
     const arrow   = document.getElementById(arrowId);
     if (!list) return;
@@ -683,10 +676,67 @@ const app = (() => {
 
     // 最终结构化结果
     if (trace.final_result) {
-      html += `<div class="trace-section">
-        <div class="trace-section-title">最终结构化结果</div>
-        <div class="trace-content">${escHtml(JSON.stringify(trace.final_result, null, 2))}</div>
-      </div>`;
+      const result = trace.final_result;
+      let resultHtml = '<div class="trace-section"><div class="trace-section-title">最终结构化结果</div>';
+
+      // Summary fields with notes
+      if (result.summary && Object.keys(result.summary).length > 0) {
+        resultHtml += '<div class="trace-content"><div class="result-group-title">概要信息</div>';
+        for (const [fieldId, value] of Object.entries(result.summary)) {
+          const fieldDef = state.fieldCatalog.find(f => f.id === fieldId);
+          const label = fieldDef?.label || fieldId;
+          const note = result.summary_notes?.[fieldId];
+          resultHtml += `<div class="result-field">
+            <div class="result-field-label">${escHtml(label)}</div>
+            <div class="result-field-value">${escHtml(value || '无')}</div>
+            ${note ? `<div class="field-note">${escHtml(note)}</div>` : ''}
+          </div>`;
+        }
+        resultHtml += '</div>';
+      }
+
+      // Tags fields with notes
+      if (result.tags && Object.keys(result.tags).length > 0) {
+        resultHtml += '<div class="trace-content"><div class="result-group-title">标签信息</div>';
+        for (const [fieldId, value] of Object.entries(result.tags)) {
+          const fieldDef = state.fieldCatalog.find(f => f.id === fieldId);
+          const label = fieldDef?.label || fieldId;
+          const note = result.tags_notes?.[fieldId];
+          resultHtml += `<div class="result-field">
+            <div class="result-field-label">${escHtml(label)}</div>
+            <div class="result-field-value">${escHtml(value || '无')}</div>
+            ${note ? `<div class="field-note">${escHtml(note)}</div>` : ''}
+          </div>`;
+        }
+        resultHtml += '</div>';
+      }
+
+      // Other fields (evidence_count, sources, error)
+      if (result.evidence_count !== undefined || result.sources?.length || result.error) {
+        resultHtml += '<div class="trace-content"><div class="result-group-title">其他信息</div>';
+        if (result.evidence_count !== undefined) {
+          resultHtml += `<div class="result-field">
+            <div class="result-field-label">证据数量</div>
+            <div class="result-field-value">${result.evidence_count}</div>
+          </div>`;
+        }
+        if (result.sources?.length) {
+          resultHtml += `<div class="result-field">
+            <div class="result-field-label">来源</div>
+            <div class="result-field-value">${result.sources.map(s => escHtml(s)).join(', ')}</div>
+          </div>`;
+        }
+        if (result.error) {
+          resultHtml += `<div class="result-field">
+            <div class="result-field-label">错误</div>
+            <div class="result-field-value" style="color: var(--stamp);">${escHtml(result.error)}</div>
+          </div>`;
+        }
+        resultHtml += '</div>';
+      }
+
+      resultHtml += '</div>';
+      html += resultHtml;
     }
 
     container.innerHTML = html || '<div class="trace-empty">无详细数据</div>';
