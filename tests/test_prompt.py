@@ -1,4 +1,4 @@
-from backend.app.services.extract.prompt import SYSTEM_PROMPT, _build_json_schema_block
+from backend.app.services.extract.prompt import SYSTEM_PROMPT, _build_json_schema_block, build_user_prompt
 from backend.app.services.extract.fields import FieldDef
 
 def test_system_prompt_has_judgment_criteria():
@@ -40,3 +40,19 @@ def test_json_schema_includes_summary_notes():
     assert '"summary_notes"' in schema
     assert '"has_hk_entity"' in schema
     assert "简要说明判断依据" in schema
+
+def test_user_prompt_includes_notes_requirement():
+    """验证 user prompt 包含备注要求"""
+    field_defs = [
+        FieldDef(
+            id="has_hk_entity",
+            label="是否有香港主体",
+            group="summary",
+            col_name="是否有香港主体",
+            instruction="测试指令",
+            field_type="yesno",
+        ),
+    ]
+    prompt = build_user_prompt("测试公司", ["证据1"], field_defs)
+    assert "每个字段必须在 summary_notes 中提供判断依据" in prompt
+    assert "识别境外主体时，需同时关注直接注册和股东关系" in prompt

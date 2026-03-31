@@ -85,15 +85,19 @@ def build_user_prompt(
     )
     schema_block = _build_json_schema_block(field_defs)
 
-    # 按 group 生成约束提示
-    yesno_summary_ids = [f.id for f in field_defs if f.group == "summary" and f.field_type == "yesno"]
-    yesno_tags_ids    = [f.id for f in field_defs if f.group == "tags"    and f.field_type == "yesno"]
+    # 生成约束提示
+    notes = [
+        '- 严格按照【判断标准】区分"有"、"无"、"未提及"三种情况。',
+        '- 识别境外主体时，需同时关注直接注册和股东关系。',
+        '- 区域归类时，按照地理和经济常识进行，欧洲国家统一归入欧美。',
+        '- 可多选的字段用顿号分隔，如"香港、东南亚"。',
+        '- 每个字段必须在 summary_notes 中提供判断依据。',
+    ]
 
-    notes = ["- 无相关证据时一律填\"未提及\"，不要捏造信息。"]
-    if yesno_summary_ids:
-        notes.append(f"- summary 中的 {', '.join(yesno_summary_ids)} 只填\"有\"或\"无\"。")
-    if yesno_tags_ids:
-        notes.append(f"- tags 中的 {', '.join(yesno_tags_ids)} 严格只填\"是\"、\"否\"或\"未提及\"。")
+    # 针对 yesno 字段的特殊约束
+    yesno_fields = [f.id for f in field_defs if f.field_type == "yesno"]
+    if yesno_fields:
+        notes.append(f"- {', '.join(yesno_fields)} 只能填\"有\"、\"无\"或\"未提及\"，不要填其他值。")
 
     notes_text = "\n".join(notes)
 
