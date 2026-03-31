@@ -30,7 +30,7 @@ class FieldDef:
         return asdict(self)
 
 
-# ── 总结维度（summary）── 9 个内置字段 ─────────────────────────────────
+# ── 总结维度（summary）── 10 个内置字段 ─────────────────────────────────
 SUMMARY_FIELDS: list[FieldDef] = [
     FieldDef(
         id="has_hk_entity",
@@ -49,11 +49,11 @@ SUMMARY_FIELDS: list[FieldDef] = [
         field_type="yesno",
     ),
     FieldDef(
-        id="overseas_entity_countries",
-        label="海外主体所在国家",
+        id="overseas_entity_regions",
+        label="海外主体所在地区",
         group="summary",
-        col_name="海外主体所在国家",
-        instruction='若有境外主体，依次列出国家/地区（顿号分隔），无则填"无"，无法判断填"未提及"',
+        col_name="海外主体所在地区",
+        instruction='若有境外主体，从以下选项中选择（可多选，顿号分隔）：香港、东南亚、欧美、中东、其他。无则填"无"，无法判断填"未提及"',
         field_type="region",
     ),
     FieldDef(
@@ -65,11 +65,11 @@ SUMMARY_FIELDS: list[FieldDef] = [
         field_type="yesno",
     ),
     FieldDef(
-        id="import_export_countries",
-        label="进出口业务涉及国家",
+        id="import_export_regions",
+        label="进出口业务涉及地区",
         group="summary",
-        col_name="进出口业务涉及国家",
-        instruction='进出口业务涉及的国家/地区（顿号分隔），无法判断则填"未提及"',
+        col_name="进出口业务涉及地区",
+        instruction='进出口业务涉及的地区，从以下选项中选择（可多选，顿号分隔）：香港、东南亚、欧美、中东、其他。无法判断则填"未提及"',
         field_type="region",
     ),
     FieldDef(
@@ -89,11 +89,19 @@ SUMMARY_FIELDS: list[FieldDef] = [
         field_type="amount",
     ),
     FieldDef(
+        id="has_going_overseas",
+        label="是否有出海规划",
+        group="summary",
+        col_name="是否有出海规划",
+        instruction='企业是否在规划/布局出海业务，只填"有"、"无"或"未提及"',
+        field_type="yesno",
+    ),
+    FieldDef(
         id="industry",
         label="企业所属行业",
         group="summary",
         col_name="企业所属行业",
-        instruction='企业所属的具体行业，如"精密仪器制造"、"跨境电商"等',
+        instruction='企业所属的具体行业，如"精密仪器制造"、"跨境电商"等。若提及股东关系，需在行业后注明，如"精密仪器制造（股东为XX银行客户）"',
         field_type="text",
     ),
     FieldDef(
@@ -107,81 +115,8 @@ SUMMARY_FIELDS: list[FieldDef] = [
 ]
 
 
-# ── 标签维度（tags）── 9 个内置字段 ────────────────────────────────────
-TAGS_FIELDS: list[FieldDef] = [
-    FieldDef(
-        id="tag1_import_export",
-        label="标签1_进出口业务",
-        group="tags",
-        col_name="标签1_进出口业务",
-        instruction='企业是否有进出口业务，严格只填"是"、"否"或"未提及"',
-        field_type="yesno",
-    ),
-    FieldDef(
-        id="tag2_overseas_entity",
-        label="标签2_境外主体",
-        group="tags",
-        col_name="标签2_境外主体",
-        instruction='企业是否有境外（含香港）主体，严格只填"是"、"否"或"未提及"',
-        field_type="yesno",
-    ),
-    FieldDef(
-        id="tag3_going_overseas",
-        label="标签3_出海规划",
-        group="tags",
-        col_name="标签3_出海规划",
-        instruction='企业是否在规划/布局出海业务，严格只填"是"、"否"或"未提及"',
-        field_type="yesno",
-    ),
-    FieldDef(
-        id="tag4_forex",
-        label="标签4_外汇业务",
-        group="tags",
-        col_name="标签4_外汇业务",
-        instruction='企业是否有外汇业务，严格只填"是"、"否"或"未提及"',
-        field_type="yesno",
-    ),
-    FieldDef(
-        id="tag5_fx_settlement",
-        label="标签5_结售汇业务",
-        group="tags",
-        col_name="标签5_结售汇业务",
-        instruction='企业是否有结售汇业务，严格只填"是"、"否"或"未提及"',
-        field_type="yesno",
-    ),
-    FieldDef(
-        id="tag6_industry",
-        label="标签6_客户行业",
-        group="tags",
-        col_name="标签6_客户行业",
-        instruction='客户所属行业，根据实际情况提取，无信息填"未提及"',
-        field_type="text",
-    ),
-    FieldDef(
-        id="tag7_business_scale",
-        label="标签7_经营规模",
-        group="tags",
-        col_name="标签7_经营规模",
-        instruction='客户境内外经营规模描述，根据实际情况提取，无信息填"未提及"',
-        field_type="text",
-    ),
-    FieldDef(
-        id="tag8_import_export_region",
-        label="标签8_进出口地区",
-        group="tags",
-        col_name="标签8_进出口地区",
-        instruction='客户进出口业务主要地区，根据实际情况提取，无信息填"未提及"',
-        field_type="region",
-    ),
-    FieldDef(
-        id="tag9_overseas_region",
-        label="标签9_出海地区",
-        group="tags",
-        col_name="标签9_出海地区",
-        instruction='客户出海业务主要地区，根据实际情况提取，无信息填"未提及"',
-        field_type="region",
-    ),
-]
+# ── 标签维度（tags）── 0 个内置字段 ────────────────────────────────────
+TAGS_FIELDS: list[FieldDef] = []
 
 
 # 全量内置字段列表（前端 /api/meta 返回此列表）
