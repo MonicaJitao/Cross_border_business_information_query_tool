@@ -695,21 +695,6 @@ const app = (() => {
         resultHtml += '</div>';
       }
 
-      // Tags fields with notes
-      if (result.tags && Object.keys(result.tags).length > 0) {
-        resultHtml += '<div class="trace-content"><div class="result-group-title">标签信息</div>';
-        for (const [fieldId, value] of Object.entries(result.tags)) {
-          const fieldDef = state.fieldCatalog.find(f => f.id === fieldId);
-          const label = fieldDef?.label || fieldId;
-          const note = result.tags_notes?.[fieldId];
-          resultHtml += `<div class="result-field">
-            <div class="result-field-label">${escHtml(label)}</div>
-            <div class="result-field-value">${escHtml(value || '无')}</div>
-            ${note ? `<div class="field-note">${escHtml(note)}</div>` : ''}
-          </div>`;
-        }
-        resultHtml += '</div>';
-      }
 
       // Other fields (evidence_count, sources, error)
       if (result.evidence_count !== undefined || result.sources?.length || result.error) {
