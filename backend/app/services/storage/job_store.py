@@ -63,16 +63,20 @@ def build_result_excel(results: list[CompanyExtraction], field_defs: list[FieldD
     """
     按照本次任务的 field_defs 动态构建 Excel。
     公共列（企业名称/证据条数/来源URL/错误信息）始终包含。
+    每个字段后紧跟其备注列。
     """
     rows = []
     for r in results:
         row: dict = {"企业名称": r.company_name}
 
+        # 每个字段后紧跟其备注列
         for fd in field_defs:
             if fd.group == "summary":
                 row[fd.col_name] = r.summary.get(fd.id, "")
-            else:
+                row[f"备注：{fd.col_name}"] = r.summary_notes.get(fd.id, "")
+            else:  # tags 组（虽然现在为空）
                 row[fd.col_name] = r.tags.get(fd.id, "")
+                row[f"备注：{fd.col_name}"] = r.tags_notes.get(fd.id, "")
 
         row["证据条数"] = r.evidence_count
         row["来源URL"]  = " | ".join(r.sources)
