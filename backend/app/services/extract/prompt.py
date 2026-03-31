@@ -36,7 +36,7 @@ SYSTEM_PROMPT = """你是一名专注于跨境贸易的企业信息分析师。
 
 3. 只依据证据中的内容作答,不要捏造信息。
 
-输出格式为 JSON,包含 summary、summary_notes 两个对象,字段一一对应。
+输出格式为 JSON。如果有 summary 字段,则输出 summary 和 summary_notes 两个对象;如果有 tags 字段,则输出 tags 和 tags_notes 两个对象。字段一一对应。
 不要输出任何额外内容。"""
 
 
