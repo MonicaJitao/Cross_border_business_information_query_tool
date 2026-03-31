@@ -44,21 +44,31 @@ def _build_json_schema_block(field_defs: list[FieldDef]) -> str:
     """
     为 LLM prompt 生成 JSON 格式示例块。
     summary 和 tags 各自成一个 JSON 子对象，键名为 field.id。
+    同时生成对应的 summary_notes 和 tags_notes 对象。
     """
     summary_lines = []
+    summary_note_lines = []
     tags_lines = []
+    tags_note_lines = []
+
     for fd in field_defs:
         line = f'    "{fd.id}": "{fd.instruction}"'
+        note_line = f'    "{fd.id}": "简要说明判断依据"'
+
         if fd.group == "summary":
             summary_lines.append(line)
+            summary_note_lines.append(note_line)
         else:
             tags_lines.append(line)
+            tags_note_lines.append(note_line)
 
     parts = []
     if summary_lines:
         parts.append('  "summary": {\n' + ",\n".join(summary_lines) + "\n  }")
+        parts.append('  "summary_notes": {\n' + ",\n".join(summary_note_lines) + "\n  }")
     if tags_lines:
         parts.append('  "tags": {\n' + ",\n".join(tags_lines) + "\n  }")
+        parts.append('  "tags_notes": {\n' + ",\n".join(tags_note_lines) + "\n  }")
 
     return "{\n" + ",\n".join(parts) + "\n}"
 
