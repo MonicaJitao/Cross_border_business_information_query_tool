@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>调试 - 字段配置检测</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    .info { background: #e7f3ff; padding: 15px; margin: 10px 0; border-left: 4px solid #2196F3; }
+    .error { background: #ffe7e7; padding: 15px; margin: 10px 0; border-left: 4px solid #f44336; }
+    .success { background: #e7ffe7; padding: 15px; margin: 10px 0; border-left: 4px solid #4CAF50; }
+    pre { background: #f5f5f5; padding: 10px; overflow-x: auto; }
+    button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>字段配置诊断工具</h1>
+  
+  <div id="status" class="info">正在检测...</div>
+  
+  <button onclick="testAPI()">1. 测试 API 连接</button>
+  <button onclick="testLocalStorage()">2. 检查本地存储</button>
+  <button onclick="clearCache()">3. 清除缓存并重新加载</button>
+  <button onclick="testFieldRendering()">4. 测试字段渲染逻辑</button>
+  
+  <div id="results"></div>
+
+  <script>
+    async function testAPI() {
+      const results = document.getElementById('results');
+      results.innerHTML = '<div class="info">正在请求 /api/meta...</div>';
+      
+      try {
+        const resp = await fetch('/api/meta');
+        const data = await resp.json();
+        
+        let html = '<div class="success">✓ API 连接成功</div>';
+        html += `<div class="info">状态码: ${resp.status}</div>`;
+        html += `<div class="info">字段目录数量: ${data.field_catalog?.length || 0}</div>`;
+        
+        if (data.field_catalog && data.field_catalog.length > 0) {
+          html += '<div class="success">✓ 后端返回了字段配置</div>';
+          html += '<h3>字段列表:</h3>';
+          data.field_catalog.forEach((f, i) => {
+            html += `<div class="info"><strong>${i+1}. ${f.label}</strong> (id: ${f.id}, type: ${f.field_type})</div>`;
+          });
+          html += '<h3>完整 JSON:</h3>';
+          html += '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+        } else {
+          html += '<div class="error">✗ 字段目录为空!</div>';
+        }
+        
+        results.innerHTML = html;
+      } catch (err) {
+        results.innerHTML = `<div class="error">✗ API 请求失败: ${err.message}</div>`;
+      }
+    }
+    
+    function testLocalStorage() {
+      const results = document.getElementById('results');
+      const key = 'cbt_config_v2';
+      const saved = localStorage.getItem(key);
+      
+      let html = '<div class="info"><h3>本地存储内容</h3></div>';
+      
+      if (saved) {
+        try {
+          const config = JSON.parse(saved);
+          html += '<pre>' + JSON.stringify(config, null, 2) + '</pre>';
+          
+          if (config.fieldEnabled) {
+            html += `<div class="info">已保存的字段状态数量: ${Object.keys(config.fieldEnabled).length}</div>`;
+          }
+          if (config.customFields) {
+            html += `<div class="info">自定义字段数量: ${config.customFields.length}</div>`;
+          }
+        } catch (e) {
+          html += `<div class="error">解析配置失败: ${e.message}</div>`;
+        }
+      } else {
+        html += '<div class="info">本地存储为空(这是正常的首次访问状态)</div>';
+      }
+      
+      results.innerHTML = html;
+    }
+    
+    async function testFieldRendering() {
+      const results = document.getElementById('results');
+      results.innerHTML = '<div class="info">正在模拟字段渲染逻辑...</div>';
+      
+      try {
+        const resp = await fetch('/api/meta');
+        const data = await resp.json();
+        
+        let html = '<div class="info"><h3>模拟前端渲染逻辑</h3></div>';
+        
+        if (!data.field_catalog || data.field_catalog.length === 0) {
+          html += '<div class="error">后端返回的 field_catalog 为空</div>';
+          results.innerHTML = html;
+          return;
+        }
+        
+        // 模拟前端逻辑
+        const backendFields = data.field_catalog.map(f => ({
+          ...f,
+          is_builtin: true,
+        }));
+        
+        html += `<div class="success">✓ 处理后的字段数量: ${backendFields.length}</div>`;
+        
+        // 过滤总结字段
+        const summaryFields = backendFields.filter(f => f.group === 'summary' && f.is_builtin);
+        html += `<div class="info">总结字段数量: ${summaryFields.length}</div>`;
+        
+        if (summaryFields.length === 0) {
+          html += '<div class="error">✗ 总结字段被过滤为空了!</div>';
+          html += '<div class="info">原因分析: 所有字段的 group 属性可能不是 "summary" 或 is_builtin 为 false</div>';
+        } else {
+          html += '<div class="success">✓ 总结字段过滤正常</div>';
+          summaryFields.forEach((f, i) => {
+            html += `<div class="info">${i+1}. ${f.label} (${f.id})</div>`;
+          });
+        }
+        
+        results.innerHTML = html;
+      } catch (err) {
+        results.innerHTML = `<div class="error">✗ 测试失败: ${err.message}</div>`;
+      }
+    }
+    
+    function clearCache() {
+      localStorage.clear();
+      sessionStorage.clear();
+      alert('缓存已清除,页面将重新加载...');
+      window.location.href = '/?t=' + Date.now();
+    }
+    
+    // 自动执行
+    testAPI();
+  </script>
+</body>
+</html>

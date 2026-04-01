@@ -62,21 +62,20 @@ const app = (() => {
     // 搜索源预置 Key 徽章
     const metasoProv = meta.search_providers?.find(p => p.id === 'metaso');
     const baiduProv  = meta.search_providers?.find(p => p.id === 'baidu');
+    const volProv    = meta.search_providers?.find(p => p.id === 'volcengine');
     if (metasoProv?.has_preset_key) document.getElementById('metasoPresetBadge').style.display = 'inline';
     if (baiduProv?.has_preset_key)  document.getElementById('baiduPresetBadge').style.display  = 'inline';
+    if (volProv?.has_preset_key)    document.getElementById('volcenginePresetBadge').style.display = 'inline';
 
     // 字段目录（内置字段来自后端，确保前后端一致）
     if (meta.field_catalog?.length) {
-      // 将后端字段目录作为内置字段基础，保留 enabled_by_default 属性
       const backendFields = meta.field_catalog.map(f => ({
         ...f,
         is_builtin: true,
       }));
-      // 合并：保留已有自定义字段，替换内置字段
       const customFields = state.fieldCatalog.filter(f => !f.is_builtin);
       state.fieldCatalog = [...backendFields, ...customFields];
 
-      // 首次加载：按 enabled_by_default 初始化 fieldEnabled（已存储的保持不变）
       backendFields.forEach(f => {
         if (!(f.id in state.fieldEnabled)) {
           state.fieldEnabled[f.id] = f.enabled_by_default !== false;
@@ -247,8 +246,12 @@ const app = (() => {
 
   // ── 搜索源变化 ────────────────────────────────────────────────
   function onSourceChange() {
+    const metasoChecked = document.getElementById('sourceMetaso').checked;
     const baiduChecked = document.getElementById('sourceBaidu').checked;
-    document.getElementById('baiduKeyRow').style.display = baiduChecked ? 'flex' : 'none';
+    const volcengineChecked = document.getElementById('sourceVolcengine').checked;
+    document.getElementById('metasoConfigRow').style.display = metasoChecked ? '' : 'none';
+    document.getElementById('baiduConfigRow').style.display = baiduChecked ? '' : 'none';
+    document.getElementById('volcengineConfigRow').style.display = volcengineChecked ? '' : 'none';
     updateSearchLimitHint();
     saveConfig();
   }
@@ -256,15 +259,24 @@ const app = (() => {
   function updateSearchLimitHint() {
     const metaso = document.getElementById('sourceMetaso').checked;
     const baidu  = document.getElementById('sourceBaidu').checked;
-    const limit  = parseInt(document.getElementById('searchResultLimit').value) || 10;
-    const sources = [metaso && '秘塔', baidu && '百度'].filter(Boolean).join(' + ');
-    if (!sources) {
+    const volcengine = document.getElementById('sourceVolcengine').checked;
+
+    const metasoLimit = parseInt(document.getElementById('metasoLimit').value) || 10;
+    const baiduLimit = parseInt(document.getElementById('baiduLimit').value) || 10;
+    const volcengineLimit = parseInt(document.getElementById('volcengineLimit').value) || 10;
+
+    const sources = [];
+    let total = 0;
+    if (metaso) { sources.push(`秘塔${metasoLimit}条`); total += metasoLimit; }
+    if (baidu) { sources.push(`百度${baiduLimit}条`); total += baiduLimit; }
+    if (volcengine) { sources.push(`火山${volcengineLimit}条`); total += volcengineLimit; }
+
+    if (!sources.length) {
       document.getElementById('searchLimitHint').textContent = '请至少选一个搜索源';
       return;
     }
-    const total = limit * [metaso, baidu].filter(Boolean).length;
     document.getElementById('searchLimitHint').textContent =
-      `${sources}，每源 ${limit} 条，合并去重后最多 ${total} 条`;
+      `将检索：${sources.join(' + ')}，去重后最多 ${total} 条`;
   }
 
   // ── 配置持久化 ────────────────────────────────────────────────
@@ -274,14 +286,23 @@ const app = (() => {
       if (saved.llmProvider)  { state.llmProvider = saved.llmProvider; syncProviderButtons(); }
       if (saved.metasoKey)    document.getElementById('metasoKey').value = saved.metasoKey;
       if (saved.baiduKey)     document.getElementById('baiduKey').value  = saved.baiduKey;
+      if (saved.volcengineKey) document.getElementById('volcengineKey').value = saved.volcengineKey;
       if (saved.metasoUsePreset !== undefined)
         document.getElementById('metasoUsePreset').checked = saved.metasoUsePreset;
       if (saved.baiduUsePreset !== undefined)
         document.getElementById('baiduUsePreset').checked = saved.baiduUsePreset;
+      if (saved.volcengineUsePreset !== undefined)
+        document.getElementById('volcengineUsePreset').checked = saved.volcengineUsePreset;
       if (saved.sourceBaidu !== undefined)
         document.getElementById('sourceBaidu').checked = saved.sourceBaidu;
-      if (saved.searchResultLimit)
-        document.getElementById('searchResultLimit').value = saved.searchResultLimit;
+      if (saved.sourceVolcengine !== undefined)
+        document.getElementById('sourceVolcengine').checked = saved.sourceVolcengine;
+      if (saved.metasoLimit)
+        document.getElementById('metasoLimit').value = saved.metasoLimit;
+      if (saved.baiduLimit)
+        document.getElementById('baiduLimit').value = saved.baiduLimit;
+      if (saved.volcengineLimit)
+        document.getElementById('volcengineLimit').value = saved.volcengineLimit;
       if (saved.llmKey)       document.getElementById('llmKey').value = saved.llmKey;
       if (saved.llmUsePreset !== undefined)
         document.getElementById('llmUsePreset').checked = saved.llmUsePreset;
@@ -316,10 +337,15 @@ const app = (() => {
         llmProvider:        state.llmProvider,
         metasoKey:          document.getElementById('metasoKey').value,
         metasoUsePreset:    document.getElementById('metasoUsePreset').checked,
+        metasoLimit:        parseInt(document.getElementById('metasoLimit').value) || 10,
         baiduKey:           document.getElementById('baiduKey').value,
         baiduUsePreset:     document.getElementById('baiduUsePreset').checked,
+        baiduLimit:         parseInt(document.getElementById('baiduLimit').value) || 10,
         sourceBaidu:        document.getElementById('sourceBaidu').checked,
-        searchResultLimit:  document.getElementById('searchResultLimit').value,
+        volcengineKey:      document.getElementById('volcengineKey').value,
+        volcengineUsePreset: document.getElementById('volcengineUsePreset').checked,
+        volcengineLimit:    parseInt(document.getElementById('volcengineLimit').value) || 10,
+        sourceVolcengine:   document.getElementById('sourceVolcengine').checked,
         llmKey:             document.getElementById('llmKey').value,
         llmUsePreset:       document.getElementById('llmUsePreset').checked,
         llmBaseUrl:         document.getElementById('llmBaseUrl').value,
@@ -355,6 +381,7 @@ const app = (() => {
   function syncPresetInputState() {
     document.getElementById('metasoKey').disabled = document.getElementById('metasoUsePreset').checked;
     document.getElementById('baiduKey').disabled  = document.getElementById('baiduUsePreset').checked;
+    document.getElementById('volcengineKey').disabled = document.getElementById('volcengineUsePreset').checked;
     document.getElementById('llmKey').disabled    = document.getElementById('llmUsePreset').checked;
   }
 
@@ -367,10 +394,7 @@ const app = (() => {
         saveConfig();
       });
     });
-    document.getElementById('searchResultLimit').addEventListener('change', () => {
-      updateSearchLimitHint();
-      saveConfig();
-    });
+    // searchResultLimit 已移除，改为每源独立配置
   }
 
   function updateThroughputHint() {
@@ -411,24 +435,47 @@ const app = (() => {
       return;
     }
 
-    // 收集选中的搜索源
+    // 构建搜索源配置列表（新结构）
     const searchProviders = [];
-    if (document.getElementById('sourceMetaso').checked) searchProviders.push('metaso');
-    if (document.getElementById('sourceBaidu').checked)  searchProviders.push('baidu');
+
+    if (document.getElementById('sourceMetaso').checked) {
+      searchProviders.push({
+        id: 'metaso',
+        num_results: parseInt(document.getElementById('metasoLimit').value) || 10,
+        api_key: document.getElementById('metasoUsePreset').checked
+          ? null : (document.getElementById('metasoKey').value || null)
+      });
+    }
+
+    if (document.getElementById('sourceBaidu').checked) {
+      searchProviders.push({
+        id: 'baidu',
+        num_results: parseInt(document.getElementById('baiduLimit').value) || 10,
+        api_key: document.getElementById('baiduUsePreset').checked
+          ? null : (document.getElementById('baiduKey').value || null)
+      });
+    }
+
+    if (document.getElementById('sourceVolcengine').checked) {
+      searchProviders.push({
+        id: 'volcengine',
+        num_results: parseInt(document.getElementById('volcengineLimit').value) || 10,
+        api_key: document.getElementById('volcengineUsePreset').checked
+          ? null : (document.getElementById('volcengineKey').value || null)
+      });
+    }
+
     if (!searchProviders.length) {
       alert('请至少选择一个搜索源');
       return;
     }
 
+    console.log('提交配置 - 搜索源:', searchProviders);
+
     setStage('uploading');
 
     const config = {
-      search_providers:    searchProviders,
-      metaso_api_key: document.getElementById('metasoUsePreset').checked
-        ? null : (document.getElementById('metasoKey').value || null),
-      baidu_api_key: document.getElementById('baiduUsePreset').checked
-        ? null : (document.getElementById('baiduKey').value || null),
-      search_result_limit: parseInt(document.getElementById('searchResultLimit').value) || 10,
+      search_providers: searchProviders,  // 新的配置结构
       field_defs: enabledFieldDefs.map(f => ({
         id:          f.id,
         label:       f.label,
@@ -460,8 +507,13 @@ const app = (() => {
       const resp = await fetch(`${API_BASE}/api/jobs`, { method: 'POST', body: formData });
       const data = await resp.json();
 
+      console.log('服务器响应:', { status: resp.status, ok: resp.ok, data });
+
       if (!resp.ok) {
-        appendLog(`错误: ${data.detail || '创建任务失败'}`, 'error');
+        const errorMsg = data.detail || '创建任务失败';
+        console.error('任务创建失败:', errorMsg);
+        alert(`任务创建失败: ${errorMsg}`);
+        appendLog(`错误: ${errorMsg}`, 'error');
         setStage('idle');
         return;
       }
@@ -484,6 +536,8 @@ const app = (() => {
       startSSE(data.job_id);
 
     } catch (err) {
+      console.error('提交任务异常:', err);
+      alert(`网络错误: ${err.message}`);
       appendLog(`网络错误: ${err.message}`, 'error');
       setStage('idle');
     } finally {
@@ -817,7 +871,7 @@ const app = (() => {
   }
 
   // ── 自动保存输入框 ────────────────────────────────────────────
-  ['metasoKey', 'baiduKey', 'llmKey', 'llmBaseUrl', 'llmModel'].forEach(id => {
+  ['metasoKey', 'baiduKey', 'volcengineKey', 'llmKey', 'llmBaseUrl', 'llmModel'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('input', saveConfig);
   });
@@ -831,6 +885,8 @@ const app = (() => {
     selectAllFields, clearAllFields, resetFields,
     toggleAddFieldForm, addCustomField, deleteCustomField,
     syncPresetInputState, saveConfig,
+    // 调试方法
+    getState: () => state,
   };
 })();
 

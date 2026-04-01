@@ -12,7 +12,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
-from ..core.config import settings
+from ..core.config import get_settings, get_env_file_value
 from ..services.extract.fields import ALL_BUILTIN_FIELDS, FieldDef
 from ..services.extract.schema import CompanyExtraction
 from ..services.llm.base import LLMConfig
@@ -20,6 +20,7 @@ from ..services.llm.factory import build_llm_provider
 from ..services.pipeline.runner import ConcurrencyConfig, run_pipeline
 from ..services.search.metaso import MetasoProvider
 from ..services.search.baidu_qianfan import BaiduQianfanProvider
+from ..services.search.volcengine import VolcengineProvider
 from ..services.search.base import SearchProvider
 from ..services.storage.job_store import (
     JobStatus,
@@ -31,6 +32,27 @@ from ..services.storage.job_store import (
 
 router = APIRouter(prefix="/api")
 logger = logging.getLogger(__name__)
+
+
+def _pick_key(
+    user_input_key: Optional[str],
+    runtime_key: Optional[str],
+    env_var_name: str,
+) -> Optional[str]:
+    """
+    统一 Key 选择逻辑（与百度/秘塔/火山一致）：
+    1) 前端手输
+    2) 运行时配置
+    3) .env 直接兜底
+    """
+    if user_input_key and str(user_input_key).strip():
+        return str(user_input_key).strip()
+    if runtime_key and str(runtime_key).strip():
+        return str(runtime_key).strip()
+    fallback = get_env_file_value(env_var_name)
+    if fallback and str(fallback).strip():
+        return str(fallback).strip()
+    return None
 
 
 # ── 请求 Schema ──────────────────────────────────────────────────
@@ -67,12 +89,21 @@ class FieldDefIn(BaseModel):
         )
 
 
+class SearchProviderConfig(BaseModel):
+    """单个搜索源配置"""
+    id: str  # "metaso" | "baidu" | "volcengine"
+    num_results: int = Field(default=10, ge=1, le=50)
+    api_key: Optional[str] = None
+
+
 class JobConfig(BaseModel):
-    # 搜索源：可单选或多选，如 ["metaso"] 或 ["metaso", "baidu"]
-    search_providers: list[str] = Field(default_factory=lambda: ["metaso"])
+    # 搜索源配置列表（替代原有的 search_providers + search_result_limit）
+    search_providers: list[SearchProviderConfig] = Field(
+        default_factory=lambda: [SearchProviderConfig(id="metaso", num_results=10)]
+    )
+    # 保留旧字段用于向后兼容（可选）
     metaso_api_key: Optional[str] = None
     baidu_api_key: Optional[str] = None
-    search_result_limit: int = Field(default=10, ge=1, le=50)
     # 字段定义：None 表示使用全部内置字段
     field_defs: Optional[list[FieldDefIn]] = None
     llm: LLMConfigIn = Field(default_factory=LLMConfigIn)
@@ -170,40 +201,63 @@ def _parse_resume_data(
 # ── GET /api/meta ─────────────────────────────────────────────────
 
 @router.get("/meta")
-async def get_meta():
+async def get_meta(debug: int = 0):
     """
     返回前端初始化所需的元信息：
     - 搜索源列表（含后端是否预置了 API Key）
     - LLM 列表
     - 字段目录（全量内置字段，前端据此渲染字段选择面板）
     """
-    return {
+    runtime_settings = get_settings(refresh=True)
+    metaso_key = _pick_key(
+        user_input_key=None,
+        runtime_key=runtime_settings.metaso_api_key,
+        env_var_name="METASO_API_KEY",
+    )
+    baidu_key = _pick_key(
+        user_input_key=None,
+        runtime_key=runtime_settings.baidu_api_key,
+        env_var_name="BAIDU_API_KEY",
+    )
+    volcengine_key = _pick_key(
+        user_input_key=None,
+        runtime_key=runtime_settings.volcengine_api_key,
+        env_var_name="VOLCENGINE_API_KEY",
+    )
+    logger.info(f"[/api/meta] volcengine runtime_key: {runtime_settings.volcengine_api_key}")
+    logger.info(f"[/api/meta] volcengine resolved_key: {'已配置' if volcengine_key else '未配置'}")
+    response = {
         "search_providers": [
             {
                 "id":             "metaso",
                 "name":           "秘塔AI搜索",
-                "has_preset_key": bool(settings.metaso_api_key),
+                "has_preset_key": bool(metaso_key),
             },
             {
                 "id":             "baidu",
                 "name":           "百度千帆搜索",
-                "has_preset_key": bool(settings.baidu_api_key),
+                "has_preset_key": bool(baidu_key),
+            },
+            {
+                "id":             "volcengine",
+                "name":           "火山引擎搜索",
+                "has_preset_key": bool(volcengine_key),
             },
         ],
         "llm_providers": [
             {
                 "id":               "claude_proxy",
                 "name":             "Claude（中转站）",
-                "has_preset_key":   bool(settings.claude_proxy_api_key),
-                "default_base_url": settings.claude_proxy_base_url or "",
-                "default_model":    settings.claude_proxy_default_model,
+                "has_preset_key":   bool(runtime_settings.claude_proxy_api_key),
+                "default_base_url": runtime_settings.claude_proxy_base_url or "",
+                "default_model":    runtime_settings.claude_proxy_default_model,
             },
             {
                 "id":               "deepseek_official",
                 "name":             "DeepSeek（官方）",
-                "has_preset_key":   bool(settings.deepseek_api_key),
-                "default_base_url": settings.deepseek_base_url,
-                "default_model":    settings.deepseek_default_model,
+                "has_preset_key":   bool(runtime_settings.deepseek_api_key),
+                "default_base_url": runtime_settings.deepseek_base_url,
+                "default_model":    runtime_settings.deepseek_default_model,
             },
         ],
         # 字段目录：前端用于渲染字段选择面板
@@ -211,6 +265,28 @@ async def get_meta():
         # 每个搜索源支持的最大条数（前端作为 search_result_limit 上限参考）
         "search_result_limit_max": 50,
     }
+    if debug:
+        response["_debug_key_resolution"] = {
+            "metaso": {
+                "runtime_has_key": bool(runtime_settings.metaso_api_key),
+                "env_file_has_key": bool(get_env_file_value("METASO_API_KEY")),
+                "resolved_has_key": bool(metaso_key),
+                "resolved_key_length": len(metaso_key) if metaso_key else 0,
+            },
+            "baidu": {
+                "runtime_has_key": bool(runtime_settings.baidu_api_key),
+                "env_file_has_key": bool(get_env_file_value("BAIDU_API_KEY")),
+                "resolved_has_key": bool(baidu_key),
+                "resolved_key_length": len(baidu_key) if baidu_key else 0,
+            },
+            "volcengine": {
+                "runtime_has_key": bool(runtime_settings.volcengine_api_key),
+                "env_file_has_key": bool(get_env_file_value("VOLCENGINE_API_KEY")),
+                "resolved_has_key": bool(volcengine_key),
+                "resolved_key_length": len(volcengine_key) if volcengine_key else 0,
+            },
+        }
+    return response
 
 
 # ── POST /api/jobs ────────────────────────────────────────────────
@@ -254,23 +330,48 @@ async def create_job_endpoint(
     pre_done = sum(1 for r in pre_results if r is not None)
     logger.info("任务创建：共 %d 家，续传 %d 家，待处理 %d 家", len(companies), pre_done, len(companies) - pre_done)
 
+    runtime_settings = get_settings(refresh=True)
+
     # ── 构建搜索 Provider 列表 ──
-    search_providers: list[SearchProvider] = []
-    requested = cfg.search_providers or ["metaso"]
+    search_providers_with_limits: list[tuple[SearchProvider, int]] = []  # (provider, num_results)
 
-    if "metaso" in requested:
-        key = cfg.metaso_api_key or settings.metaso_api_key
-        if not key:
-            raise HTTPException(status_code=400, detail="未配置秘塔 API Key")
-        search_providers.append(MetasoProvider(api_key=key))
+    for prov_cfg in cfg.search_providers:
+        num_results = prov_cfg.num_results
 
-    if "baidu" in requested:
-        key = cfg.baidu_api_key or settings.baidu_api_key
-        if not key:
-            raise HTTPException(status_code=400, detail="未配置百度千帆 API Key")
-        search_providers.append(BaiduQianfanProvider(api_key=key))
+        if prov_cfg.id == "metaso":
+            key = _pick_key(
+                user_input_key=prov_cfg.api_key or cfg.metaso_api_key,
+                runtime_key=runtime_settings.metaso_api_key,
+                env_var_name="METASO_API_KEY",
+            )
+            if not key:
+                raise HTTPException(status_code=400, detail="未配置秘塔 API Key")
+            search_providers_with_limits.append((MetasoProvider(api_key=key), num_results))
 
-    if not search_providers:
+        elif prov_cfg.id == "baidu":
+            key = _pick_key(
+                user_input_key=prov_cfg.api_key or cfg.baidu_api_key,
+                runtime_key=runtime_settings.baidu_api_key,
+                env_var_name="BAIDU_API_KEY",
+            )
+            if not key:
+                raise HTTPException(status_code=400, detail="未配置百度千帆 API Key")
+            search_providers_with_limits.append((BaiduQianfanProvider(api_key=key), num_results))
+
+        elif prov_cfg.id == "volcengine":
+            key = _pick_key(
+                user_input_key=prov_cfg.api_key,
+                runtime_key=runtime_settings.volcengine_api_key,
+                env_var_name="VOLCENGINE_API_KEY",
+            )
+            logger.info(f"[火山引擎] prov_cfg.api_key: {prov_cfg.api_key}")
+            logger.info(f"[火山引擎] settings.volcengine_api_key: {'已配置' if runtime_settings.volcengine_api_key else '未配置'}")
+            logger.info(f"[火山引擎] 最终使用的 key: {'已配置' if key else '未配置'}")
+            if not key:
+                raise HTTPException(status_code=400, detail="未配置火山引擎 API Key（前端未传入且后端 .env 中未配置）")
+            search_providers_with_limits.append((VolcengineProvider(api_key=key), num_results))
+
+    if not search_providers_with_limits:
         raise HTTPException(status_code=400, detail="至少需要选择一个搜索源")
 
     # ── 构建 LLM Provider ──
@@ -294,12 +395,12 @@ async def create_job_endpoint(
         try:
             results = await run_pipeline(
                 companies=companies,
-                search_providers=search_providers,
+                search_providers=search_providers_with_limits,  # 现在是 list[tuple[SearchProvider, int]]
                 llm_provider=llm_provider,
                 concurrency=concurrency,
                 event_queue=job.event_queue,
                 field_defs=field_defs,
-                search_result_limit=cfg.search_result_limit,
+                # 移除 search_result_limit 参数
                 pre_results=pre_results,
                 cancel_event=job.cancel_event,
             )
@@ -311,7 +412,7 @@ async def create_job_endpoint(
             job.status = JobStatus.FAILED
             job.error = str(exc)
         finally:
-            for p in search_providers:
+            for p, _ in search_providers_with_limits:
                 await p.close()
             await llm_provider.close()
 

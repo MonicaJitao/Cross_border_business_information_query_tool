@@ -986,6 +986,23 @@ body {
   gap: var(--sp-1);
 }
 
+.source-config-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.source-key-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.source-limit-select {
+  width: 80px;
+  flex-shrink: 0;
+  align-self: flex-end;
+}
+
 /* 搜索条数行 */
 .search-limit-row {
   display: flex;

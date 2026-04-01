@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>跨境业务企业信息查询</title>
-  <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260401" />
 </head>
 <body>
 
@@ -49,7 +49,7 @@
             </label>
             <span class="field-preset-badge" id="metasoPresetBadge" style="display:none">后端已预置</span>
           </div>
-          <div class="source-key-row" id="metasoKeyRow">
+          <div class="source-config-row" id="metasoConfigRow">
             <div class="preset-row">
               <label class="toggle-switch">
                 <input type="checkbox" id="metasoUsePreset" onchange="app.syncPresetInputState(); app.saveConfig();" />
@@ -57,8 +57,15 @@
               </label>
               <span class="preset-label">使用后端预置 Key</span>
             </div>
-            <input type="password" class="field-input" id="metasoKey"
+            <input type="password" class="field-input source-key-input" id="metasoKey"
               placeholder="mk-xxxxxxxx（秘塔 API Key）" autocomplete="off" />
+            <select class="field-select source-limit-select" id="metasoLimit" onchange="app.updateSearchLimitHint(); app.saveConfig();">
+              <option value="5">5条</option>
+              <option value="10" selected>10条</option>
+              <option value="20">20条</option>
+              <option value="30">30条</option>
+              <option value="50">50条</option>
+            </select>
           </div>
         </div>
 
@@ -71,7 +78,7 @@
             </label>
             <span class="field-preset-badge" id="baiduPresetBadge" style="display:none">后端已预置</span>
           </div>
-          <div class="source-key-row" id="baiduKeyRow" style="display:none">
+          <div class="source-config-row" id="baiduConfigRow" style="display:none">
             <div class="preset-row">
               <label class="toggle-switch">
                 <input type="checkbox" id="baiduUsePreset" onchange="app.syncPresetInputState(); app.saveConfig();" />
@@ -79,25 +86,51 @@
               </label>
               <span class="preset-label">使用后端预置 Key</span>
             </div>
-            <input type="password" class="field-input" id="baiduKey"
+            <input type="password" class="field-input source-key-input" id="baiduKey"
               placeholder="千帆 API Key" autocomplete="off" />
+            <select class="field-select source-limit-select" id="baiduLimit" onchange="app.updateSearchLimitHint(); app.saveConfig();">
+              <option value="5">5条</option>
+              <option value="10" selected>10条</option>
+              <option value="20">20条</option>
+              <option value="30">30条</option>
+              <option value="50">50条</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 火山引擎 -->
+        <div class="source-item" id="volcengineSourceItem">
+          <div class="source-header">
+            <label class="source-check-label">
+              <input type="checkbox" id="sourceVolcengine" onchange="app.onSourceChange()" />
+              <span class="source-name">火山引擎搜索</span>
+            </label>
+            <span class="field-preset-badge" id="volcenginePresetBadge" style="display:none">后端已预置</span>
+          </div>
+          <div class="source-config-row" id="volcengineConfigRow" style="display:none">
+            <div class="preset-row">
+              <label class="toggle-switch">
+                <input type="checkbox" id="volcengineUsePreset" onchange="app.syncPresetInputState(); app.saveConfig();" />
+                <span class="toggle-track"></span>
+              </label>
+              <span class="preset-label">使用后端预置 Key</span>
+            </div>
+            <input type="password" class="field-input source-key-input" id="volcengineKey"
+              placeholder="火山引擎 API Key" autocomplete="off" />
+            <select class="field-select source-limit-select" id="volcengineLimit" onchange="app.updateSearchLimitHint(); app.saveConfig();">
+              <option value="5">5条</option>
+              <option value="10" selected>10条</option>
+              <option value="20">20条</option>
+              <option value="30">30条</option>
+              <option value="50">50条</option>
+            </select>
           </div>
         </div>
       </div>
 
-      <!-- 搜索条数 -->
+      <!-- 搜索限制提示 -->
       <div class="field-group">
-        <div class="field-label">每源检索条数</div>
-        <div class="search-limit-row">
-          <select class="field-select" id="searchResultLimit" onchange="app.saveConfig()">
-            <option value="5">5 条</option>
-            <option value="10" selected>10 条（默认）</option>
-            <option value="20">20 条</option>
-            <option value="30">30 条</option>
-            <option value="50">50 条（最精确）</option>
-          </select>
-          <span class="search-limit-hint" id="searchLimitHint">·</span>
-        </div>
+        <div class="search-limit-hint" id="searchLimitHint">·</div>
       </div>
     </div>
 
@@ -318,6 +351,6 @@
 
 </div>
 
-<script src="/static/app.js"></script>
+<script src="/static/app.js?v=20260401"></script>
 </body>
 </html>

@@ -49,18 +49,21 @@ class ProgressEvent:
 
 async def _multi_search(
     query: str,
-    providers: list[SearchProvider],
-    num_results: int,
+    providers_with_limits: list[tuple[SearchProvider, int]],  # 改为元组列表
 ) -> tuple[list[SearchResult], list[dict]]:
     """
-    并行调用所有搜索源，对结果按 URL 去重后合并。
-    无 URL 时退化为 title+snippet 指纹去重。
+    并行调用所有搜索源，每个源使用独立的检索数量。
+    对结果按 URL 去重后合并。
+
+    Args:
+        query: 搜索查询词
+        providers_with_limits: (provider, num_results) 元组列表
 
     Returns:
-        merged_results: 去重后的结果列表（保持顺序，metaso 结果优先）
-        raw_response_entries: 每个 provider 的原始响应条目（含 query + provider_name）
+        merged_results: 去重后的结果列表
+        raw_response_entries: 每个 provider 的原始响应条目
     """
-    tasks = [p.search(query, num_results=num_results) for p in providers]
+    tasks = [p.search(query, num_results=n) for p, n in providers_with_limits]
     responses: list[SearchResponse | BaseException] = await asyncio.gather(*tasks, return_exceptions=True)
 
     merged: list[SearchResult] = []
@@ -68,7 +71,7 @@ async def _multi_search(
     seen_urls: set[str] = set()
     seen_fps: set[str] = set()   # 无 URL 时的 title+snippet 指纹
 
-    for provider, resp in zip(providers, responses):
+    for (provider, _), resp in zip(providers_with_limits, responses):
         if isinstance(resp, BaseException):
             logger.warning("搜索源 %s 异常（query=%s）: %s", provider.name, query[:40], resp)
             continue
@@ -120,12 +123,12 @@ def _truncate_str(s: str, max_len: int = 2000) -> str:
 
 async def run_pipeline(
     companies: list[str],
-    search_providers: list[SearchProvider],
+    search_providers: list[tuple[SearchProvider, int]],  # 改为 (provider, num_results) 元组
     llm_provider: LLMProvider,
     concurrency: ConcurrencyConfig,
     event_queue: asyncio.Queue,
     field_defs: list[FieldDef],
-    search_result_limit: int = 10,
+    # 移除 search_result_limit: int = 10 参数
     pre_results: Optional[list[Optional[CompanyExtraction]]] = None,
     cancel_event: Optional[asyncio.Event] = None,
 ) -> list[CompanyExtraction]:
@@ -142,14 +145,15 @@ async def run_pipeline(
     llm_sem    = asyncio.Semaphore(concurrency.llm)
 
     pre_done = sum(1 for r in results if r is not None)
-    provider_names = " + ".join(p.name for p in search_providers) or "（无搜索源）"
+    provider_names = " + ".join(p.name for p, _ in search_providers) or "（无搜索源）"
+    limits_info = ", ".join(f"{p.name}:{n}条" for p, n in search_providers)
 
     await event_queue.put(ProgressEvent(
         event="start", total=total,
         message=(
             f"开始处理 {total} 家企业"
             + (f"（续传 {pre_done} 家）" if pre_done else "")
-            + f"  搜索源: {provider_names}  每源条数: {search_result_limit}"
+            + f"  搜索源: {limits_info}"
         ),
     ))
 
@@ -201,7 +205,7 @@ async def run_pipeline(
                     break
                 async with search_sem:
                     merged, raw_entries = await _multi_search(
-                        group_query, search_providers, search_result_limit
+                        group_query, search_providers  # 直接传递 providers_with_limits
                     )
 
                 trace.search_raw_responses.extend(raw_entries)

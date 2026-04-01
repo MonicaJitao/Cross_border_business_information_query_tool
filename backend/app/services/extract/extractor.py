@@ -83,23 +83,33 @@ async def extract_company_info(
 
     summary_data: dict = parsed.get("summary", {})
     tags_data: dict    = parsed.get("tags", {})
+    summary_notes_data: dict = parsed.get("summary_notes", {})
+    tags_notes_data: dict    = parsed.get("tags_notes", {})
 
     # 只保留本次选中字段的值，其余忽略
     summary: dict[str, str] = {}
     tags: dict[str, str]    = {}
+    summary_notes: dict[str, str] = {}
+    tags_notes: dict[str, str]    = {}
 
     for fd in field_defs:
         if fd.group == "summary":
             val = summary_data.get(fd.id)
             summary[fd.id] = str(val).strip() if val is not None else ""
+            note_val = summary_notes_data.get(fd.id)
+            summary_notes[fd.id] = str(note_val).strip() if note_val is not None else ""
         else:
             val = tags_data.get(fd.id)
             tags[fd.id] = str(val).strip() if val is not None else ""
+            note_val = tags_notes_data.get(fd.id)
+            tags_notes[fd.id] = str(note_val).strip() if note_val is not None else ""
 
     extraction = CompanyExtraction(
         company_name=company_name,
         summary=summary,
         tags=tags,
+        summary_notes=summary_notes,
+        tags_notes=tags_notes,
         evidence_count=len(search_results),
         sources=[r.url for r in search_results[:5] if r.url],
     )
