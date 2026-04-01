@@ -12,22 +12,30 @@ Endpoint: POST https://qianfan.baidubce.com/v2/ai_search/web_search
 
 响应解析：使用 references 数组（每条含 title / url / content / date）
 """
-import asyncio
 import logging
-import time
 from typing import Any, Optional
 
 import httpx
 
-from .base import SearchProvider, SearchResponse, SearchResult
+from .base import (
+    AsyncRateLimiter,
+    SearchProvider, SearchResponse, SearchResult,
+    extract_first_list, retry_with_backoff, truncate_raw,
+)
 
 logger = logging.getLogger(__name__)
 
 BAIDU_SEARCH_URL = "https://qianfan.baidubce.com/v2/ai_search/web_search"
 
-_MIN_INTERVAL = 0.2      # 百度接口至少间隔 0.2s
-_BACKOFF_BASE = 2.0
-_BACKOFF_MAX  = 60.0
+_MIN_INTERVAL = 0.2
+_MAX_RETRIES = 3
+
+_CANDIDATE_PATHS: list[list[str]] = [
+    ["references"],
+    ["data", "references"],
+    ["search_results"],
+    ["data", "search_results"],
+]
 
 
 class BaiduQianfanProvider(SearchProvider):
@@ -36,11 +44,11 @@ class BaiduQianfanProvider(SearchProvider):
         api_key: str,
         timeout: float = 20.0,
     ):
-        self._api_key   = api_key
-        self._timeout   = timeout
+        self._api_key = api_key
+        self._timeout = timeout
         self._client: Optional[httpx.AsyncClient] = None
         self._consecutive_failures = 0
-        self._last_request_at: float = 0.0
+        self._limiter = AsyncRateLimiter(_MIN_INTERVAL)
 
     @property
     def name(self) -> str:
@@ -54,17 +62,16 @@ class BaiduQianfanProvider(SearchProvider):
             )
         return self._client
 
-    async def _rate_wait(self) -> None:
-        interval = min(
-            _MIN_INTERVAL * (_BACKOFF_BASE ** min(self._consecutive_failures, 4)),
-            _BACKOFF_MAX,
-        )
-        elapsed = time.monotonic() - self._last_request_at
-        if elapsed < interval:
-            await asyncio.sleep(interval - elapsed)
-
     async def search(self, query: str, num_results: int = 10) -> SearchResponse:
-        await self._rate_wait()
+        async def _attempt() -> SearchResponse:
+            return await self._do_search(query, num_results)
+
+        return await retry_with_backoff(
+            _attempt, query, max_retries=_MAX_RETRIES, log=logger
+        )
+
+    async def _do_search(self, query: str, num_results: int) -> SearchResponse:
+        await self._limiter.acquire(self._consecutive_failures)
 
         payload: dict[str, Any] = {
             "messages": [{"role": "user", "content": query}],
@@ -76,16 +83,13 @@ class BaiduQianfanProvider(SearchProvider):
             "Content-Type": "application/json",
         }
         client = self._get_client()
-        self._last_request_at = time.monotonic()
 
         try:
             resp = await client.post(BAIDU_SEARCH_URL, json=payload, headers=headers)
 
             if resp.status_code == 429:
                 self._consecutive_failures += 1
-                retry_after = min(1.0 * (2 ** (self._consecutive_failures - 1)), 4.0)
-                logger.warning("百度 429，退避 %.1fs", retry_after)
-                await asyncio.sleep(retry_after)
+                logger.warning("百度（429，连续失败 %d 次）", self._consecutive_failures)
                 return SearchResponse(query=query, error="rate_limited")
 
             if resp.status_code in (401, 403):
@@ -95,11 +99,10 @@ class BaiduQianfanProvider(SearchProvider):
             data = resp.json()
             self._consecutive_failures = 0
 
-            raw_snapshot = _truncate_raw(data)
+            raw_snapshot = truncate_raw(data)
             logger.debug("百度搜索 raw keys: %s", list(data.keys()) if isinstance(data, dict) else type(data).__name__)
 
-            # 提取 references 数组
-            references = _extract_references(data)
+            references = extract_first_list(data, _CANDIDATE_PATHS, fallback_scan=False)
 
             if not references:
                 logger.warning("百度搜索 200 但未解析到 references（query=%s）keys=%s",
@@ -140,35 +143,3 @@ class BaiduQianfanProvider(SearchProvider):
     async def close(self) -> None:
         if self._client and not self._client.is_closed:
             await self._client.aclose()
-
-
-def _extract_references(data: Any) -> list[dict]:
-    """
-    从百度千帆响应中提取 references 列表。
-    支持多种响应结构：顶层 references、data.references、search_results 等。
-    """
-    if not isinstance(data, dict):
-        return []
-    for path in [["references"], ["data", "references"], ["search_results"], ["data", "search_results"]]:
-        cur: Any = data
-        for key in path:
-            if isinstance(cur, dict):
-                cur = cur.get(key)
-            else:
-                cur = None
-                break
-        if isinstance(cur, list) and cur and isinstance(cur[0], dict):
-            return cur
-    return []
-
-
-def _truncate_raw(data: Any, max_len: int = 2000) -> dict:
-    """截断原始响应，用于调试展示"""
-    try:
-        import json
-        text = json.dumps(data, ensure_ascii=False, default=str)
-        if len(text) <= max_len:
-            return data if isinstance(data, dict) else {"_raw": text}
-        return {"_truncated": text[:max_len] + "..."}
-    except Exception:
-        return {"_error": "无法序列化原始响应"}

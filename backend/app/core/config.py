@@ -83,8 +83,4 @@ print("[配置加载诊断]")
 print(f"  metaso_api_key: {'已配置 (长度: ' + str(len(settings.metaso_api_key)) + ')' if settings.metaso_api_key else '未配置'}")
 print(f"  baidu_api_key: {'已配置 (长度: ' + str(len(settings.baidu_api_key)) + ')' if settings.baidu_api_key else '未配置'}")
 print(f"  volcengine_api_key: {'已配置 (长度: ' + str(len(settings.volcengine_api_key)) + ')' if settings.volcengine_api_key else '未配置'}")
-if settings.volcengine_api_key:
-    print(f"  volcengine_api_key 值: {settings.volcengine_api_key}")
-else:
-    print(f"  ✗ 火山引擎 API Key 未加载，请检查 .env 文件！")
 print("=" * 60)

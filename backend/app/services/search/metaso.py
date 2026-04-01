@@ -2,24 +2,27 @@
 秘塔 AI 搜索 Provider
 API: https://metaso.cn/search-api/playground
 """
-import asyncio
 import json
 import logging
-import time
-from typing import Any, Optional
+from typing import Optional
 
 import httpx
 
-from .base import SearchProvider, SearchResponse, SearchResult
+from .base import (
+    AsyncRateLimiter,
+    SearchProvider, SearchResponse, SearchResult,
+    extract_first_list, retry_with_backoff, truncate_raw,
+)
 
 logger = logging.getLogger(__name__)
 
 METASO_SEARCH_URL = "https://metaso.cn/api/v1/search"
 
 _MIN_INTERVAL = 0.1
-_BACKOFF_BASE = 2.0
-_BACKOFF_MAX  = 60.0
+_MAX_RETRIES = 3
 
+# 秘塔支持多种内容类型，候选路径比其他 Provider 更多；
+# 同时启用兜底扫描（fallback_scan=True），容忍接口字段名随版本变更。
 _CANDIDATE_PATHS: list[list[str]] = [
     ["results"],
     ["data", "results"],
@@ -36,36 +39,10 @@ _CANDIDATE_PATHS: list[list[str]] = [
 ]
 
 
-def _dig(data: dict, path: list[str]) -> Any:
-    cur = data
-    for key in path:
-        if isinstance(cur, dict):
-            cur = cur.get(key)
-        else:
-            return None
-    return cur
-
-
-def _extract_items(data: dict) -> list[dict]:
-    for path in _CANDIDATE_PATHS:
-        candidate = _dig(data, path)
-        if isinstance(candidate, list) and len(candidate) > 0:
-            if isinstance(candidate[0], dict):
-                logger.info("秘塔结果路径命中: %s (%d 条)", ".".join(path), len(candidate))
-                return candidate
-    # 兜底：扫描顶层所有 list[dict] 字段，避免字段名再次变化时整批变成 0 条证据
-    for key, candidate in data.items():
-        if isinstance(candidate, list) and len(candidate) > 0 and isinstance(candidate[0], dict):
-            logger.info("秘塔结果路径兜底命中: %s (%d 条)", key, len(candidate))
-            return candidate
-    return []
-
-
 class MetasoProvider(SearchProvider):
     def __init__(
         self,
         api_key: str,
-        # metaso 文档 scope 示例为 webpage/document/scholar/...
         scope: str = "webpage",
         num_results: int = 10,
         timeout: float = 15.0,
@@ -76,7 +53,7 @@ class MetasoProvider(SearchProvider):
         self._timeout     = timeout
         self._client: Optional[httpx.AsyncClient] = None
         self._consecutive_failures = 0
-        self._last_request_at: float = 0.0
+        self._limiter = AsyncRateLimiter(_MIN_INTERVAL)
 
     @property
     def name(self) -> str:
@@ -90,36 +67,36 @@ class MetasoProvider(SearchProvider):
             )
         return self._client
 
-    async def _rate_wait(self) -> None:
-        interval = min(_MIN_INTERVAL * (_BACKOFF_BASE ** min(self._consecutive_failures, 4)), _BACKOFF_MAX)
-        elapsed = time.monotonic() - self._last_request_at
-        if elapsed < interval:
-            await asyncio.sleep(interval - elapsed)
-
     async def search(self, query: str, num_results: int = 0) -> SearchResponse:
-        await self._rate_wait()
         n = num_results or self._num_results
+
+        async def _attempt() -> SearchResponse:
+            return await self._do_search(query, n)
+
+        return await retry_with_backoff(
+            _attempt, query, max_retries=_MAX_RETRIES, log=logger
+        )
+
+    async def _do_search(self, query: str, num_results: int) -> SearchResponse:
+        await self._limiter.acquire(self._consecutive_failures)
+
         headers = {"Authorization": f"Bearer {self._api_key}"}
-        # metaso /api/v1/search：q/scope/includeSummary 必填；size/page 二选一（示例用 size）
-        payload = {"q": query, "scope": self._scope, "includeSummary": True, "size": n}
+        payload = {"q": query, "scope": self._scope, "includeSummary": True, "size": num_results}
         client  = self._get_client()
-        self._last_request_at = time.monotonic()
 
         try:
             resp = await client.post(METASO_SEARCH_URL, json=payload, headers=headers)
 
             if resp.status_code == 429:
                 self._consecutive_failures += 1
-                retry_after = min(1.0 * (2 ** (self._consecutive_failures - 1)), 4.0)
-                logger.warning("Metaso 429，退避 %.1fs（连续失败 %d 次）", retry_after, self._consecutive_failures)
-                await asyncio.sleep(retry_after)
+                logger.warning("Metaso 429（连续失败 %d 次）", self._consecutive_failures)
                 return SearchResponse(query=query, error="rate_limited")
 
             resp.raise_for_status()
             data = resp.json()
             self._consecutive_failures = 0
 
-            raw_snapshot = _truncate_raw(data)
+            raw_snapshot = truncate_raw(data)
             logger.debug("Metaso raw keys: %s", list(data.keys()) if isinstance(data, dict) else type(data).__name__)
 
             if not isinstance(data, dict):
@@ -129,7 +106,6 @@ class MetasoProvider(SearchProvider):
                     raw_response={"_raw_type": str(type(data))},
                 )
 
-            # metaso 常见失败结构：{errCode:int, errMsg:str}
             err_code = data.get("errCode")
             if isinstance(err_code, int) and err_code != 0:
                 err_msg = data.get("errMsg")
@@ -140,7 +116,7 @@ class MetasoProvider(SearchProvider):
                     raw_response=raw_snapshot,
                 )
 
-            items = _extract_items(data)
+            items = extract_first_list(data, _CANDIDATE_PATHS, fallback_scan=True)
 
             if not items:
                 logger.warning(
@@ -173,7 +149,7 @@ class MetasoProvider(SearchProvider):
                     or item.get("abstract")
                     or ""
                 )
-                source = item.get("source", "")
+                source   = item.get("source", "")
                 pub_date = item.get("date") or item.get("published_date") or item.get("publishedDate")
 
                 if not title and not url and not snippet:
@@ -208,14 +184,3 @@ class MetasoProvider(SearchProvider):
     async def close(self) -> None:
         if self._client and not self._client.is_closed:
             await self._client.aclose()
-
-
-def _truncate_raw(data: Any, max_str_len: int = 300) -> dict:
-    """对原始响应做受控截断，用于调试和前端展示。"""
-    try:
-        text = json.dumps(data, ensure_ascii=False, default=str)
-        if len(text) <= 2000:
-            return data if isinstance(data, dict) else {"_raw": text}
-        return {"_truncated": text[:2000] + "..."}
-    except Exception:
-        return {"_error": "无法序列化原始响应"}
