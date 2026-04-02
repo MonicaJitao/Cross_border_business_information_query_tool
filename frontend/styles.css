@@ -1324,3 +1324,38 @@ body {
     border-bottom: var(--border-strong);
   }
 }
+
+/* ── API 测试按钮 & 结果 ─────────────────────────────────────── */
+.btn-api-test {
+  width: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  background: transparent;
+  border: var(--border-strong);
+  border-radius: var(--r-md);
+  color: var(--text-mid);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.btn-api-test:hover:not(:disabled) {
+  background: var(--paper-dim);
+  color: var(--ink);
+}
+.btn-api-test:disabled {
+  opacity: .55;
+  cursor: default;
+}
+
+.api-test-result {
+  margin-top: var(--sp-2);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+  line-height: 1.5;
+  color: var(--text-dim);
+  min-height: 0;
+}
+.api-test-result.ok   { color: var(--green); }
+.api-test-result.fail { color: var(--stamp); }
+

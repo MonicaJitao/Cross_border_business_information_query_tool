@@ -405,6 +405,97 @@ const app = (() => {
     document.getElementById('throughputHint').textContent = `≈ ${perHour.toLocaleString()} 企业/小时`;
   }
 
+  // ── API 连通性测试 ────────────────────────────────────────────
+  async function testSearch() {
+    const btn = document.getElementById('testSearchBtn');
+    const resultEl = document.getElementById('testSearchResult');
+
+    // 收集当前勾选的搜索源
+    const sources = [];
+    if (document.getElementById('sourceMetaso').checked) sources.push('metaso');
+    if (document.getElementById('sourceBaidu').checked) sources.push('baidu');
+    if (document.getElementById('sourceVolcengine').checked) sources.push('volcengine');
+
+    if (!sources.length) {
+      resultEl.textContent = '请先勾选至少一个搜索源';
+      resultEl.className = 'api-test-result fail';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = '测试中…';
+    resultEl.textContent = '';
+    resultEl.className = 'api-test-result';
+
+    const keyMap = {
+      metaso:      { keyId: 'metasoKey',      presetId: 'metasoUsePreset' },
+      baidu:       { keyId: 'baiduKey',       presetId: 'baiduUsePreset' },
+      volcengine:  { keyId: 'volcengineKey',  presetId: 'volcengineUsePreset' },
+    };
+
+    const results = [];
+    for (const src of sources) {
+      const { keyId, presetId } = keyMap[src];
+      const usePreset = document.getElementById(presetId).checked;
+      const apiKey = usePreset ? null : (document.getElementById(keyId).value.trim() || null);
+      try {
+        const resp = await fetch('/api/test/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider_id: src, api_key: apiKey }),
+        });
+        const data = await resp.json();
+        results.push(`${src}: ${data.ok ? '✓ ' + data.message : '✗ ' + data.message}`);
+      } catch (e) {
+        results.push(`${src}: ✗ 请求失败`);
+      }
+    }
+
+    const allOk = results.every(r => r.includes('✓'));
+    resultEl.textContent = results.join('\n');
+    resultEl.className = 'api-test-result ' + (allOk ? 'ok' : 'fail');
+    btn.disabled = false;
+    btn.textContent = '测试搜索 API';
+  }
+
+  async function testLLM() {
+    const btn = document.getElementById('testLLMBtn');
+    const resultEl = document.getElementById('testLLMResult');
+
+    btn.disabled = true;
+    btn.textContent = '测试中…';
+    resultEl.textContent = '';
+    resultEl.className = 'api-test-result';
+
+    const usePreset = document.getElementById('llmUsePreset').checked;
+    const apiKey = usePreset ? null : (document.getElementById('llmKey').value.trim() || null);
+    const payload = {
+      provider: state.llmProvider,
+      base_url: document.getElementById('llmBaseUrl').value.trim() || null,
+      api_key:  apiKey,
+      model:    document.getElementById('llmModel').value.trim() || null,
+    };
+
+    try {
+      const resp = await fetch('/api/test/llm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await resp.json();
+      resultEl.textContent = data.ok
+        ? `✓ ${data.message}${data.reply ? '：' + data.reply : ''}`
+        : `✗ ${data.message}`;
+      resultEl.className = 'api-test-result ' + (data.ok ? 'ok' : 'fail');
+    } catch (e) {
+      resultEl.textContent = '✗ 请求失败';
+      resultEl.className = 'api-test-result fail';
+    }
+
+    btn.disabled = false;
+    btn.textContent = '测试大模型连接';
+  }
+
   // ── 文件处理 ──────────────────────────────────────────────────
   function onFileChange(e) { if (e.target.files[0]) setFile(e.target.files[0]); }
   function onDragOver(e)   { e.preventDefault(); document.getElementById('uploadZone').classList.add('drag-over'); }
@@ -885,6 +976,7 @@ const app = (() => {
     selectAllFields, clearAllFields, resetFields,
     toggleAddFieldForm, addCustomField, deleteCustomField,
     syncPresetInputState, saveConfig,
+    testSearch, testLLM,
     // 调试方法
     getState: () => state,
   };

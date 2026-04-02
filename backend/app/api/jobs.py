@@ -486,3 +486,90 @@ async def download_result(job_id: str):
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="result_{job_id[:8]}.xlsx"'},
     )
+
+
+# ── POST /api/test/search ─────────────────────────────────────────
+
+class TestSearchRequest(BaseModel):
+    provider_id: str          # "metaso" | "baidu" | "volcengine"
+    api_key: Optional[str] = None
+
+
+@router.post("/test/search")
+async def test_search(req: TestSearchRequest):
+    """快速测试搜索 API 是否可用（发一条固定查询，取 1 条结果）"""
+    runtime_settings = get_settings(refresh=True)
+
+    env_map = {
+        "metaso":      ("METASO_API_KEY",      runtime_settings.metaso_api_key),
+        "baidu":       ("BAIDU_API_KEY",        runtime_settings.baidu_api_key),
+        "volcengine":  ("VOLCENGINE_API_KEY",   runtime_settings.volcengine_api_key),
+    }
+    if req.provider_id not in env_map:
+        raise HTTPException(status_code=400, detail=f"未知搜索源: {req.provider_id}")
+
+    env_var, runtime_key = env_map[req.provider_id]
+    api_key = _pick_key(req.api_key, runtime_key, env_var)
+    if not api_key:
+        return {"ok": False, "message": "未提供 API Key 且后端无预置 Key"}
+
+    try:
+        if req.provider_id == "metaso":
+            provider = MetasoProvider(api_key=api_key, num_results=1)
+        elif req.provider_id == "baidu":
+            provider = BaiduQianfanProvider(api_key=api_key)
+        else:
+            provider = VolcengineProvider(api_key=api_key)
+
+        resp = await provider.search("测试", num_results=1)
+        await provider.close()
+
+        if resp.error:
+            return {"ok": False, "message": f"搜索失败: {resp.error}"}
+        return {
+            "ok": True,
+            "message": f"连接成功，返回 {len(resp.results)} 条结果",
+            "sample": resp.results[0].title if resp.results else None,
+        }
+    except Exception as exc:
+        return {"ok": False, "message": str(exc)}
+
+
+# ── POST /api/test/llm ────────────────────────────────────────────
+
+class TestLLMRequest(BaseModel):
+    provider: str             # "deepseek_official" | "claude_proxy"
+    base_url: Optional[str] = None
+    api_key: Optional[str] = None
+    model: Optional[str] = None
+
+
+@router.post("/test/llm")
+async def test_llm(req: TestLLMRequest):
+    """快速测试 LLM 是否可用（发一条极短 prompt，max_tokens=10）"""
+    try:
+        cfg = LLMConfig(
+            provider=req.provider,
+            base_url=req.base_url or "",
+            api_key=req.api_key,
+            model=req.model or "",
+        )
+        llm = build_llm_provider(cfg)
+        resp = await llm.complete(
+            system_prompt="你是助手。",
+            user_prompt="请回复 OK",
+            max_tokens=10,
+        )
+        await llm.close()
+
+        if resp.error:
+            return {"ok": False, "message": f"调用失败: {resp.error}"}
+        return {
+            "ok": True,
+            "message": f"连接成功，模型已响应",
+            "reply": resp.content[:50] if resp.content else "",
+        }
+    except ValueError as exc:
+        return {"ok": False, "message": str(exc)}
+    except Exception as exc:
+        return {"ok": False, "message": str(exc)}
