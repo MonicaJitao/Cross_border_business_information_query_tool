@@ -15,6 +15,16 @@ from .parse import parse_llm_json
 logger = logging.getLogger(__name__)
 
 
+def _normalize_value(val) -> str:
+    """后处理兜底：将 LLM 仍然输出的'未提及'统一转为'无'。"""
+    if val is None:
+        return ""
+    normalized = str(val).strip()
+    if normalized == "未提及":
+        normalized = "无"
+    return normalized
+
+
 def _build_evidence_snippets(results: list[SearchResult]) -> list[str]:
     """将 SearchResult 列表转为 prompt 用的文本片段"""
     snippets = []
@@ -95,12 +105,12 @@ async def extract_company_info(
     for fd in field_defs:
         if fd.group == "summary":
             val = summary_data.get(fd.id)
-            summary[fd.id] = str(val).strip() if val is not None else ""
+            summary[fd.id] = _normalize_value(val)
             note_val = summary_notes_data.get(fd.id)
             summary_notes[fd.id] = str(note_val).strip() if note_val is not None else ""
         else:
             val = tags_data.get(fd.id)
-            tags[fd.id] = str(val).strip() if val is not None else ""
+            tags[fd.id] = _normalize_value(val)
             note_val = tags_notes_data.get(fd.id)
             tags_notes[fd.id] = str(note_val).strip() if note_val is not None else ""
 
