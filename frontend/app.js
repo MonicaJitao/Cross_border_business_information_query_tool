@@ -256,14 +256,50 @@ const app = (() => {
     saveConfig();
   }
 
+  // ── 搜索条数：select + 自定义输入 ────────────────────────────────
+  function getLimitValue(provider) {
+    const sel = document.getElementById(provider + 'Limit');
+    if (sel.value === 'custom') {
+      return parseInt(document.getElementById(provider + 'LimitCustom').value) || 10;
+    }
+    return parseInt(sel.value) || 10;
+  }
+
+  function onLimitChange(provider) {
+    const sel = document.getElementById(provider + 'Limit');
+    const customInput = document.getElementById(provider + 'LimitCustom');
+    if (sel.value === 'custom') {
+      customInput.style.display = '';
+      customInput.focus();
+    } else {
+      customInput.style.display = 'none';
+    }
+    updateSearchLimitHint();
+    saveConfig();
+  }
+
+  function restoreLimitValue(provider, val) {
+    const sel = document.getElementById(provider + 'Limit');
+    const customInput = document.getElementById(provider + 'LimitCustom');
+    const presets = ['5', '10', '20', '30', '50'];
+    if (presets.includes(String(val))) {
+      sel.value = val;
+      customInput.style.display = 'none';
+    } else {
+      sel.value = 'custom';
+      customInput.value = val;
+      customInput.style.display = '';
+    }
+  }
+
   function updateSearchLimitHint() {
     const metaso = document.getElementById('sourceMetaso').checked;
     const baidu  = document.getElementById('sourceBaidu').checked;
     const volcengine = document.getElementById('sourceVolcengine').checked;
 
-    const metasoLimit = parseInt(document.getElementById('metasoLimit').value) || 10;
-    const baiduLimit = parseInt(document.getElementById('baiduLimit').value) || 10;
-    const volcengineLimit = parseInt(document.getElementById('volcengineLimit').value) || 10;
+    const metasoLimit = getLimitValue('metaso');
+    const baiduLimit = getLimitValue('baidu');
+    const volcengineLimit = getLimitValue('volcengine');
 
     const sources = [];
     let total = 0;
@@ -298,11 +334,11 @@ const app = (() => {
       if (saved.sourceVolcengine !== undefined)
         document.getElementById('sourceVolcengine').checked = saved.sourceVolcengine;
       if (saved.metasoLimit)
-        document.getElementById('metasoLimit').value = saved.metasoLimit;
+        restoreLimitValue('metaso', saved.metasoLimit);
       if (saved.baiduLimit)
-        document.getElementById('baiduLimit').value = saved.baiduLimit;
+        restoreLimitValue('baidu', saved.baiduLimit);
       if (saved.volcengineLimit)
-        document.getElementById('volcengineLimit').value = saved.volcengineLimit;
+        restoreLimitValue('volcengine', saved.volcengineLimit);
       if (saved.llmKey)       document.getElementById('llmKey').value = saved.llmKey;
       if (saved.llmUsePreset !== undefined)
         document.getElementById('llmUsePreset').checked = saved.llmUsePreset;
@@ -337,14 +373,14 @@ const app = (() => {
         llmProvider:        state.llmProvider,
         metasoKey:          document.getElementById('metasoKey').value,
         metasoUsePreset:    document.getElementById('metasoUsePreset').checked,
-        metasoLimit:        parseInt(document.getElementById('metasoLimit').value) || 10,
+        metasoLimit:        getLimitValue('metaso'),
         baiduKey:           document.getElementById('baiduKey').value,
         baiduUsePreset:     document.getElementById('baiduUsePreset').checked,
-        baiduLimit:         parseInt(document.getElementById('baiduLimit').value) || 10,
+        baiduLimit:         getLimitValue('baidu'),
         sourceBaidu:        document.getElementById('sourceBaidu').checked,
         volcengineKey:      document.getElementById('volcengineKey').value,
         volcengineUsePreset: document.getElementById('volcengineUsePreset').checked,
-        volcengineLimit:    parseInt(document.getElementById('volcengineLimit').value) || 10,
+        volcengineLimit:    getLimitValue('volcengine'),
         sourceVolcengine:   document.getElementById('sourceVolcengine').checked,
         llmKey:             document.getElementById('llmKey').value,
         llmUsePreset:       document.getElementById('llmUsePreset').checked,
@@ -398,11 +434,7 @@ const app = (() => {
   }
 
   function updateThroughputHint() {
-    const sc = parseInt(document.getElementById('searchConcurrency').value);
-    const lc = parseInt(document.getElementById('llmConcurrency').value);
-    const perCompanyS = (3 / sc) * 2 + (1 / lc) * 8;
-    const perHour = Math.round(3600 / perCompanyS);
-    document.getElementById('throughputHint').textContent = `≈ ${perHour.toLocaleString()} 企业/小时`;
+    // 吞吐量提示已移除
   }
 
   // ── API 连通性测试 ────────────────────────────────────────────
@@ -532,7 +564,7 @@ const app = (() => {
     if (document.getElementById('sourceMetaso').checked) {
       searchProviders.push({
         id: 'metaso',
-        num_results: parseInt(document.getElementById('metasoLimit').value) || 10,
+        num_results: getLimitValue('metaso'),
         api_key: document.getElementById('metasoUsePreset').checked
           ? null : (document.getElementById('metasoKey').value || null)
       });
@@ -541,7 +573,7 @@ const app = (() => {
     if (document.getElementById('sourceBaidu').checked) {
       searchProviders.push({
         id: 'baidu',
-        num_results: parseInt(document.getElementById('baiduLimit').value) || 10,
+        num_results: getLimitValue('baidu'),
         api_key: document.getElementById('baiduUsePreset').checked
           ? null : (document.getElementById('baiduKey').value || null)
       });
@@ -550,7 +582,7 @@ const app = (() => {
     if (document.getElementById('sourceVolcengine').checked) {
       searchProviders.push({
         id: 'volcengine',
-        num_results: parseInt(document.getElementById('volcengineLimit').value) || 10,
+        num_results: getLimitValue('volcengine'),
         api_key: document.getElementById('volcengineUsePreset').checked
           ? null : (document.getElementById('volcengineKey').value || null)
       });
@@ -971,7 +1003,7 @@ const app = (() => {
     init, selectLLM, submitJob, cancelJob, downloadResult,
     onFileChange, onDragOver, onDragLeave, onDrop,
     clearLog, toggleTrace,
-    onSourceChange, updateSearchLimitHint,
+    onSourceChange, updateSearchLimitHint, onLimitChange,
     toggleFieldGroup, onFieldToggle,
     selectAllFields, clearAllFields, resetFields,
     toggleAddFieldForm, addCustomField, deleteCustomField,

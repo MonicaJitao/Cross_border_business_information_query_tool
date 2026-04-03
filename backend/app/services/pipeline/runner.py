@@ -20,9 +20,21 @@ from ..llm.base import LLMProvider
 from ..extract.extractor import extract_company_info
 from ..extract.fields import FieldDef
 from ..extract.schema import CompanyExtraction, CompanyTrace
-from .keywords import build_keyword_groups, MIN_RESULTS_TO_SKIP
+from .keywords import build_keyword_groups
+from ..trace.persist import TraceWriter, TracePersistConfig, create_trace_record
 
 logger = logging.getLogger(__name__)
+
+def _published_date_to_jsonable(v: Any) -> Optional[str]:
+    if v is None:
+        return None
+    iso = getattr(v, "isoformat", None)
+    if callable(iso):
+        try:
+            return str(iso())
+        except Exception:
+            return str(v)
+    return str(v)
 
 
 @dataclass
@@ -131,6 +143,7 @@ async def run_pipeline(
     # 移除 search_result_limit: int = 10 参数
     pre_results: Optional[list[Optional[CompanyExtraction]]] = None,
     cancel_event: Optional[asyncio.Event] = None,
+    job_id: Optional[str] = None,  # 新增：用于 trace 落盘
 ) -> list[CompanyExtraction]:
     total = len(companies)
     results: list[Optional[CompanyExtraction]] = (
@@ -140,6 +153,13 @@ async def run_pipeline(
     failed = 0
     skipped = 0
     start_ts = time.monotonic()
+
+    # ── 初始化 TraceWriter ────────────────────────────────────────
+    trace_config = TracePersistConfig()
+    trace_writer: Optional[TraceWriter] = None
+    if job_id:
+        trace_writer = TraceWriter(job_id=job_id, config=trace_config)
+        await trace_writer.start()
 
     search_sem = asyncio.Semaphore(concurrency.search)
     llm_sem    = asyncio.Semaphore(concurrency.llm)
@@ -217,8 +237,6 @@ async def run_pipeline(
                         company_name=company,
                         message=f"[搜索] {company} 累计 {len(all_results)} 条证据",
                     ))
-                    if len(all_results) >= MIN_RESULTS_TO_SKIP:
-                        break
                 else:
                     await event_queue.put(ProgressEvent(
                         event="log", total=total, completed=completed, failed=failed, skipped=skipped,
@@ -253,6 +271,29 @@ async def run_pipeline(
             trace.llm_evidence_summary = _truncate_str(user_prompt, 3000)
             trace.llm_raw_output       = _truncate_str(llm_raw, 3000)
             trace.final_result         = extraction.model_dump(exclude={"trace"})
+
+            # ── 写入完整 Trace 记录（在截断之前） ──────────────────────────
+            if trace_writer:
+                full_evidence: list[dict[str, Any]] = []
+                for r in all_results:
+                    full_evidence.append({
+                        "title": r.title,
+                        "url": r.url,
+                        "snippet": r.snippet,
+                        "provider_name": r.provider_name,
+                        "source": r.source,
+                        "published_date": _published_date_to_jsonable(getattr(r, "published_date", None)),
+                    })
+                record = create_trace_record(
+                    company_name=company,
+                    status="done" if not extraction.error else "error",
+                    evidence=full_evidence,
+                    user_prompt_full=user_prompt,
+                    llm_raw_output_full=llm_raw,
+                    final_result=extraction.model_dump(exclude={"trace"}),
+                    error=extraction.error,
+                )
+                await trace_writer.enqueue(record)
 
             extraction.trace = trace
             results[idx] = extraction
@@ -290,6 +331,20 @@ async def run_pipeline(
             logger.exception("process_one 内部异常（公司: %s）", company)
             err_msg = f"{type(exc).__name__}: {exc}"
             results[idx] = CompanyExtraction(company_name=company, error=f"内部异常: {err_msg}")
+            
+            # ── 异常也要写入 Trace ──────────────────────────────────────
+            if trace_writer:
+                record = create_trace_record(
+                    company_name=company,
+                    status="error",
+                    evidence=[],
+                    user_prompt_full="",
+                    llm_raw_output_full="",
+                    final_result={},
+                    error=f"内部异常: {err_msg}",
+                )
+                await trace_writer.enqueue(record)
+            
             await event_queue.put(ProgressEvent(
                 event="company_error",
                 total=total, completed=completed, failed=failed, skipped=skipped,
@@ -317,6 +372,10 @@ async def run_pipeline(
         elapsed_s=time.monotonic() - start_ts,
         message=finish_msg,
     ))
+
+    # ── 关闭 TraceWriter ──────────────────────────────────────────
+    if trace_writer:
+        await trace_writer.close()
 
     return [r or CompanyExtraction(company_name=companies[i], error="未处理") for i, r in enumerate(results)]
 

@@ -1003,6 +1003,24 @@ body {
   align-self: flex-end;
 }
 
+.limit-combo {
+  display: flex;
+  gap: var(--sp-2);
+  align-self: flex-end;
+}
+
+.limit-custom-input {
+  width: 64px !important;
+  text-align: center;
+  -moz-appearance: textfield;
+}
+
+.limit-custom-input::-webkit-inner-spin-button,
+.limit-custom-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
 /* 搜索条数行 */
 .search-limit-row {
   display: flex;

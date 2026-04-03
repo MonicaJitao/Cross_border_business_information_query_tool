@@ -285,8 +285,18 @@ Excel 上传 → 解析企业名单 → 并发处理
 
 <p align="right">(<a href="#readme-top">返回顶部</a>)</p>
 
+<!-- 更新日志 -->
+## 更新日志
 
-查看 [open issues](https://github.com/your_username/cross_border_tool/issues) 了解完整的功能规划和已知问题。
+### 2026-04-03
+- 后端任务 API 升级：`field_defs` / `search_providers` 新配置结构支持多搜索源与每源 `num_results`；新增 SSE 进度、停止、结果 Excel 下载，以及任务 trace（JSONL）下载。
+- LLM JSON 解析增强：`parse_llm_json()` 采用多策略解析并增加未转义双引号修复；对缺失的 `summary_notes` / `tags_notes` 自动补齐。
+- Pipeline 重构与可追溯 trace：关键词组多源并行检索、URL 去重合并；将用户勾选 `field_defs` 透传到抽取阶段，并在每家公司落盘完整 trace（搜索原始响应、去重合并结果、prompt、LLM 原始输出、最终结构化结果）。
+- Trace 持久化实现：新增 `TraceWriter` 使用异步队列串行落盘 JSONL，提升并发写入安全性，并补齐单元测试。
+- 前端升级：字段启用/自定义字段管理；搜索源多选与每源条数配置；在企业列表展开视图中展示 trace 详情（搜索、去重结果、LLM 输出、最终结果）。
+- 测试补齐：新增关键词组生成与解析、trace 持久化相关测试用例，提升回归保障。
+
+
 
 <p align="right">(<a href="#readme-top">返回顶部</a>)</p>
 

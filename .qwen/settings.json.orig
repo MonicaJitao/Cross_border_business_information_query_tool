@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(d:\\space\\anaconda3_space\\envs\\cb_tool\\python.exe *)"
+    ]
+  }
+}

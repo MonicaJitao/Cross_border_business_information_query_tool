@@ -59,13 +59,20 @@
             </div>
             <input type="password" class="field-input source-key-input" id="metasoKey"
               placeholder="mk-xxxxxxxx（秘塔 API Key）" autocomplete="off" />
-            <select class="field-select source-limit-select" id="metasoLimit" onchange="app.updateSearchLimitHint(); app.saveConfig();">
-              <option value="5">5条</option>
-              <option value="10" selected>10条</option>
-              <option value="20">20条</option>
-              <option value="30">30条</option>
-              <option value="50">50条</option>
-            </select>
+            <div class="limit-combo">
+              <select class="field-select source-limit-select" id="metasoLimit" onchange="app.onLimitChange('metaso')">
+                <option value="5">5条</option>
+                <option value="10" selected>10条</option>
+                <option value="20">20条</option>
+                <option value="30">30条</option>
+                <option value="50">50条</option>
+                <option value="custom">自定义</option>
+              </select>
+              <input type="number" class="field-input limit-custom-input" id="metasoLimitCustom"
+                min="1" max="50" placeholder="1-50"
+                oninput="app.updateSearchLimitHint(); app.saveConfig();"
+                style="display:none" />
+            </div>
           </div>
         </div>
 
@@ -88,13 +95,20 @@
             </div>
             <input type="password" class="field-input source-key-input" id="baiduKey"
               placeholder="千帆 API Key" autocomplete="off" />
-            <select class="field-select source-limit-select" id="baiduLimit" onchange="app.updateSearchLimitHint(); app.saveConfig();">
-              <option value="5">5条</option>
-              <option value="10" selected>10条</option>
-              <option value="20">20条</option>
-              <option value="30">30条</option>
-              <option value="50">50条</option>
-            </select>
+            <div class="limit-combo">
+              <select class="field-select source-limit-select" id="baiduLimit" onchange="app.onLimitChange('baidu')">
+                <option value="5">5条</option>
+                <option value="10" selected>10条</option>
+                <option value="20">20条</option>
+                <option value="30">30条</option>
+                <option value="50">50条</option>
+                <option value="custom">自定义</option>
+              </select>
+              <input type="number" class="field-input limit-custom-input" id="baiduLimitCustom"
+                min="1" max="50" placeholder="1-50"
+                oninput="app.updateSearchLimitHint(); app.saveConfig();"
+                style="display:none" />
+            </div>
           </div>
         </div>
 
@@ -117,13 +131,20 @@
             </div>
             <input type="password" class="field-input source-key-input" id="volcengineKey"
               placeholder="火山引擎 API Key" autocomplete="off" />
-            <select class="field-select source-limit-select" id="volcengineLimit" onchange="app.updateSearchLimitHint(); app.saveConfig();">
-              <option value="5">5条</option>
-              <option value="10" selected>10条</option>
-              <option value="20">20条</option>
-              <option value="30">30条</option>
-              <option value="50">50条</option>
-            </select>
+            <div class="limit-combo">
+              <select class="field-select source-limit-select" id="volcengineLimit" onchange="app.onLimitChange('volcengine')">
+                <option value="5">5条</option>
+                <option value="10" selected>10条</option>
+                <option value="20">20条</option>
+                <option value="30">30条</option>
+                <option value="50">50条</option>
+                <option value="custom">自定义</option>
+              </select>
+              <input type="number" class="field-input limit-custom-input" id="volcengineLimitCustom"
+                min="1" max="50" placeholder="1-50"
+                oninput="app.updateSearchLimitHint(); app.saveConfig();"
+                style="display:none" />
+            </div>
           </div>
         </div>
       </div>
@@ -267,7 +288,6 @@
           <input type="range" class="range-slider" id="llmConcurrency" min="1" max="10" value="3" />
           <span class="range-value" id="llmConcurrencyVal">3</span>
         </div>
-        <div class="throughput-hint" id="throughputHint">— 企业/小时</div>
       </div>
     </div>
 

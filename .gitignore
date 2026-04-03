@@ -12,3 +12,6 @@ __pycache__/
 
 # Claude artifacts
 .claude/
+
+# Trace logs (JSONL files for job execution traces)
+backend/app/logs/

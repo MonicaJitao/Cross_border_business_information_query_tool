@@ -224,8 +224,8 @@ async def get_meta(debug: int = 0):
         runtime_key=runtime_settings.volcengine_api_key,
         env_var_name="VOLCENGINE_API_KEY",
     )
-    logger.info(f"[/api/meta] volcengine runtime_key: {runtime_settings.volcengine_api_key}")
-    logger.info(f"[/api/meta] volcengine resolved_key: {'已配置' if volcengine_key else '未配置'}")
+    # logger.info(f"[/api/meta] volcengine runtime_key: {runtime_settings.volcengine_api_key}")
+    # logger.info(f"[/api/meta] volcengine resolved_key: {'已配置' if volcengine_key else '未配置'}")
     response = {
         "search_providers": [
             {
@@ -403,6 +403,7 @@ async def create_job_endpoint(
                 # 移除 search_result_limit 参数
                 pre_results=pre_results,
                 cancel_event=job.cancel_event,
+                job_id=job.id,  # 传入 job_id 用于 trace 落盘
             )
             job.results = results
             job.result_bytes = build_result_excel(results, field_defs)
@@ -485,6 +486,32 @@ async def download_result(job_id: str):
         content=job.result_bytes,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="result_{job_id[:8]}.xlsx"'},
+    )
+
+
+# ── GET /api/jobs/{job_id}/trace ─────────────────────────────────
+
+@router.get("/jobs/{job_id}/trace")
+async def download_trace(job_id: str):
+    """
+    下载任务的完整 Trace 日志（JSONL 格式）。
+    包含每家公司处理的完整 Prompt、LLM 原始输出、evidence 列表。
+    """
+    from pathlib import Path
+    
+    trace_dir = Path("backend/app/logs/jobs")
+    trace_file = trace_dir / f"{job_id}.jsonl"
+    
+    if not trace_file.exists():
+        raise HTTPException(status_code=404, detail=f"Trace 文件不存在: {job_id}.jsonl")
+    
+    # 读取文件内容
+    content = trace_file.read_bytes()
+    
+    return Response(
+        content=content,
+        media_type="application/x-jsonl",
+        headers={"Content-Disposition": f'attachment; filename="trace_{job_id[:8]}.jsonl"'},
     )
 
 
